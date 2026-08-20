@@ -1,0 +1,58 @@
+# ===== Reference project (not part of this repo) =====
+ki-board/
+
+# ===== Component datasheets / vendor reference material (large binaries, not committed) =====
+datasheets/
+
+# ===== Personal notes / scratch (developer-maintained, never committed) =====
+MyMemo.md
+docs.local/
+temp/
+
+# ===== Companion: Node / Vite =====
+node_modules/
+companion/dist/
+companion/.vite/
+
+# ===== Companion: Rust / Tauri =====
+target/
+**/target/
+**/gen/schemas/
+
+# ===== Firmware: TuyaOpen build artifacts =====
+firmware/.build/
+firmware/build/
+firmware/output/
+*.bin
+*.elf
+*.map
+*.hex
+*.o
+*.a
+
+# ===== Enclosure: 3D / CAD temp files (independent project at repo root) =====
+enclosure/export/*.gcode
+*.gcode
+*.stl.bak
+*.FCStd1
+*.blend1
+
+# ===== Python =====
+__pycache__/
+*.pyc
+
+# ===== Editors / OS =====
+.vscode/settings.json
+.vscode/launch.json
+*.code-workspace
+.DS_Store
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*~
+
+# ===== Logs / temp =====
+*.log
+*.tmp
+*.bak
+*.swp
