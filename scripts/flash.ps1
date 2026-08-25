@@ -17,7 +17,7 @@
   Serial COM port to flash (e.g. COM5). If omitted, the script lists candidate ports and asks.
 
 .PARAMETER App
-  Remote app directory name under the project. Default: signal_light_demo/source/embedded
+  Remote app directory name under the project. Default: ref_projects/signal_light_demo/source/embedded
   For our own tests later, pass e.g. -App "firmware/tests/lcd".
 
 .PARAMETER Build
@@ -31,7 +31,7 @@
 
 .EXAMPLE
   .\flash.ps1 -Port COM5
-  Pull latest signal_light_demo QIO bin and flash to COM5.
+  Pull latest ref_projects/signal_light_demo QIO bin and flash to COM5.
 
 .EXAMPLE
   .\flash.ps1 -Port COM5 -Build -Monitor
@@ -44,7 +44,7 @@
 [CmdletBinding()]
 param(
     [string]$Port,
-    [string]$App = "signal_light_demo/source/embedded",
+    [string]$App = "ref_projects/signal_light_demo/source/embedded",
     [switch]$Build,
     [switch]$Monitor,
     [int]$Baud = 460800,
@@ -80,12 +80,13 @@ if ($Build) {
 }
 
 # --- 2. Locate newest *_QIO_*.bin on devbox ---
-Info "Locating latest QIO bin under $remoteApp/.build/bin ..."
-# -printf keeps it to a single newest path; fall back to plain find if -printf unsupported
-$findCmd = "ls -t '$remoteApp'/.build/bin/*_QIO_*.bin 2>/dev/null | head -1"
+Info "Locating latest QIO bin under $remoteApp/dist or $remoteApp/.build/bin ..."
+# Current TuyaOpen writes release artifacts to dist/<version>/; older versions
+# used .build/bin. Search both layouts and return the newest matching file.
+$findCmd = "find '$remoteApp/dist' '$remoteApp/.build/bin' -type f -name '*_QIO_*.bin' -printf '%T@ %p\n' 2>/dev/null | sort -nr | head -1 | cut -d' ' -f2-"
 $remoteBin = (ssh $SshHost $findCmd).Trim()
 if ([string]::IsNullOrWhiteSpace($remoteBin)) {
-    Fail "No *_QIO_*.bin found on $SshHost under $remoteApp/.build/bin. Run with -Build first, or check the -App path."
+    Fail "No *_QIO_*.bin found on $SshHost under $remoteApp/dist or $remoteApp/.build/bin. Run with -Build first, or check the -App path."
 }
 Info "Remote bin: $remoteBin"
 

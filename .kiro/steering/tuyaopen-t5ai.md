@@ -5,8 +5,9 @@ inclusion: always
 # TuyaOpen · T5AI-Core 开发上下文
 
 本项目（面向 Kiro 的 AI 小键盘）的固件基于 **Tuya T5AI-Core + TuyaOpen**。
-开发固件 / 硬件 / 配网 / 语音相关任务时，**动手前优先查本地知识库 `tuya-kb/`**
-（已 clone 在仓库根，git-ignored，不入库，仅供参考；内容对齐官方并标了核实日期）。
+开发固件 / 硬件 / 配网 / 语音相关任务时，**动手前优先查本地知识库
+`/data/projects/tuya-kb/`**（独立于本仓库，仅供参考；内容对齐官方并标了核实日期）。
+TuyaOpen SDK 位于 `/data/projects/TuyaOpen/`，同样独立于本仓库。
 
 > 本 steering 由 `tuya-kb/.kiro/steering/tuyaopen-t5ai.md` 适配而来：
 > 路径改为本仓库相对路径，并针对**本机 Windows 环境**调整工具链说明。
@@ -28,24 +29,24 @@ inclusion: always
 - 设备只连 **2.4GHz** Wi-Fi。UUID/AuthKey 是设备 License，**不要提交进仓库**。
 - **USB 仅 Host 模式**，无 USB Device HID；"直连"只能走 **BLE HID**（见配网/蓝牙文档）。
 
-## 知识库文档索引（相对仓库根，均在 `tuya-kb/`）
+## 知识库文档索引（均在 `/data/projects/tuya-kb/`）
 
-- 框架总览：`tuya-kb/01-tuyaopen-framework/00-overview.md`
-- T5AI-Core 硬件：`tuya-kb/02-t5ai-core-board/00-overview.md`；**引脚复用表**：`tuya-kb/02-t5ai-core-board/01-peripheral-pin-mapping.md`
-- 环境搭建：`tuya-kb/03-toolchain-setup/00-environment-setup.md`；**Windows 云编译+本地烧录**：`tuya-kb/03-toolchain-setup/01-cloud-build-local-flash-windows.md`
-- `tos.py` 全命令：`tuya-kb/04-tos-cli/00-tos-py-guide.md`
-- 工程结构/编译：`tuya-kb/05-app-development/00-project-structure.md`
-- 产品/PID/DP：`tuya-kb/06-dp-datapoints/00-product-and-dp.md`；DP C API：`tuya-kb/06-dp-datapoints/01-dp-c-api.md`
-- 配网：`tuya-kb/07-network-provisioning/00-pairing.md`；**蓝牙/BLE HID**：`tuya-kb/07-network-provisioning/01-bluetooth-and-ble-hid.md`
-- AI/音频总览：`tuya-kb/08-ai-audio-lcd/00-index.md`；音频/AI API：`tuya-kb/08-ai-audio-lcd/01-audio-ai-api.md`；
-  **语音听写（取 ASR 文字）**：`tuya-kb/08-ai-audio-lcd/02-voice-dictation-and-events.md`；**LCD ST7789+LVGL**：`tuya-kb/08-ai-audio-lcd/03-lcd-st7789-lvgl.md`
-- 授权/调试：`tuya-kb/09-debugging/00-auth-and-debug.md`；OTA：`tuya-kb/09-debugging/01-ota.md`
-- 官方链接：`tuya-kb/10-references/00-official-links.md`
-- **产品设计（无线小键盘/可行性/连接方案）**：`tuya-kb/11-product-design/`
-- 器件手册（含 LCD / 44P 排针 / 摇杆等）：`tuya-kb/datasheets/`
+- 框架总览：`/data/projects/tuya-kb/01-tuyaopen-framework/00-overview.md`
+- T5AI-Core 硬件：`/data/projects/tuya-kb/02-t5ai-core-board/00-overview.md`；**引脚复用表**：`/data/projects/tuya-kb/02-t5ai-core-board/01-peripheral-pin-mapping.md`
+- 环境搭建：`/data/projects/tuya-kb/03-toolchain-setup/00-environment-setup.md`；**Windows 云编译+本地烧录**：`/data/projects/tuya-kb/03-toolchain-setup/01-cloud-build-local-flash-windows.md`
+- `tos.py` 全命令：`/data/projects/tuya-kb/04-tos-cli/00-tos-py-guide.md`
+- 工程结构/编译：`/data/projects/tuya-kb/05-app-development/00-project-structure.md`
+- 产品/PID/DP：`/data/projects/tuya-kb/06-dp-datapoints/00-product-and-dp.md`；DP C API：`/data/projects/tuya-kb/06-dp-datapoints/01-dp-c-api.md`
+- 配网：`/data/projects/tuya-kb/07-network-provisioning/00-pairing.md`；**蓝牙/BLE HID**：`/data/projects/tuya-kb/07-network-provisioning/01-bluetooth-and-ble-hid.md`
+- AI/音频总览：`/data/projects/tuya-kb/08-ai-audio-lcd/00-index.md`；音频/AI API：`/data/projects/tuya-kb/08-ai-audio-lcd/01-audio-ai-api.md`；
+  **语音听写（取 ASR 文字）**：`/data/projects/tuya-kb/08-ai-audio-lcd/02-voice-dictation-and-events.md`；**LCD ST7789+LVGL**：`/data/projects/tuya-kb/08-ai-audio-lcd/03-lcd-st7789-lvgl.md`
+- 授权/调试：`/data/projects/tuya-kb/09-debugging/00-auth-and-debug.md`；OTA：`/data/projects/tuya-kb/09-debugging/01-ota.md`
+- 官方链接：`/data/projects/tuya-kb/10-references/00-official-links.md`
+- **产品设计（无线小键盘/可行性/连接方案）**：`/data/projects/tuya-kb/11-product-design/`
+- 器件手册（含 LCD / 44P 排针 / 摇杆等）：`/data/projects/tuya-kb/datasheets/`
 
 ## 与本项目文档的关系
 
-- 硬件引脚分配以本仓库 `hardware/pinmap/` 为准；`tuya-kb/02-t5ai-core-board/01-peripheral-pin-mapping.md`
-  与 `tuya-kb/datasheets/` 用于回填 44P 逐脚位号、CL28CK230 的 18P FPC 定义、摇杆脚序等待确认项。
+- 硬件引脚分配以本仓库 `hardware/pinmap/` 为准；`/data/projects/tuya-kb/02-t5ai-core-board/01-peripheral-pin-mapping.md`
+  与 `/data/projects/tuya-kb/datasheets/` 用于回填 44P 逐脚位号、CL28CK230 的 18P FPC 定义、摇杆脚序等待确认项。
 - 协议以 `shared/protocol/protocol.md` 为准。

@@ -5,7 +5,11 @@
 > **本机只负责固件烧录、串口调试、Companion 运行与手测**。
 > 基线现状（2026-08-25 核对）：
 > - `firmware/`：仅 README 骨架，**无 app 代码**，TuyaOpen SDK 未引入。
-> - `companion/`：Tauri 骨架完成；`protocol.rs`（3 单测通过）+ `transport/{mod,usb_serial,ble_gatt}.rs` 骨架；`Cargo.lock` 已锁版本。
+> - TuyaOpen：`/data/projects/TuyaOpen` 已完成 `tos.py check`，子模块、T5AI 平台
+>   (`52c6e54b`) 与 GCC Arm 10.3 工具链已就绪；`ref_projects/signal_light_demo`
+>   使用 `TUYA_T5AI_CORE.config` 全量构建成功。
+> - `companion/`：Tauri 骨架完成；Node 22.23.2 / Rust 1.98.0 已锁定，
+>   `package-lock.json` 已生成；Rust 4 个单测、TypeScript typecheck、Vite build 均通过。
 > - `shared/protocol/protocol.md`：协议 v1 已定稿。
 > - **无 CI**（无 `.gitlab-ci.yml`）。仓库托管于 GitLab（`gitlab.aws.dev`）。
 > 任务编号沿用 `docs/implementation-plan.md` 的 16 任务（Task 3–16）。
@@ -17,7 +21,7 @@
 ```
 ┌───────────── EC2 (Linux, 编译主力) ─────────────┐     ┌───── 本机 Windows (烧录/调试/运行) ─────┐
 │ • TuyaOpen SDK + tos.py 全量工具链              │     │ • 默认无编译工具链(省空间;可按需临时装)  │
-│ • 固件 tos.py build → 产 QIO/UG bin              │ scp │ • CH343SER 驱动 + tyutool/WebTool 烧录    │
+│ • 固件 tos.py build → dist/<version>/ QIO/UG bin │ scp │ • CH343SER 驱动 + tyutool/WebTool 烧录    │
 │ • 固件 host 侧单测(input_fsm/protocol)           │────▶│ • 串口看日志(460800)                      │
 │ • (可选)Companion Linux 侧 cargo test/clippy     │     │ • 运行 Companion(Windows 安装包)          │
 └──────────────────────────────────────────────────┘     │ • 手测: 按键→注入 / 语音 / LCD / hook     │
@@ -102,9 +106,9 @@
 1. 在 `firmware/` 基于 `TUYA_T5AI_CORE.config` 建最小 app（app 入口 + 串口打印心跳）。
 2. 落地板级引脚宏（对齐 PRD §7.1 / `hardware/pinmap/`）：LCD SPI(P14/P16/P15/P17/P6/P5/P7)、
    KEY1-5(P24/P25/P26/P27/P23)、NAV(P32/P20/P21/P22/P30)、WS2812_DIN(P13)；分辨率 320×240。
-3. `tos.py clean -f && tos.py build` → 产 `.build/bin/*_QIO_*.bin`。
+3. `tos.py clean -f && tos.py build` → 产 `dist/<version>/*_QIO_*.bin`（旧版可能为 `.build/bin/`）。
 **本机：**
-4. `scp ec2:<path>/.build/bin/*_QIO_*.bin .` → tyutool/WebTool 烧录（460800，**开电源开关**）。
+4. `scp ec2:<path>/dist/<version>/*_QIO_*.bin .` → tyutool/WebTool 烧录（460800，**开电源开关**）。
 5. **验证**：串口 monitor 见周期心跳输出。
 ✅ Demo：上电串口打印心跳。
 
@@ -139,7 +143,7 @@
 **固件改-烧循环（本机 `flash.ps1`，可选）**
 ```powershell
 param([string]$Port="COM5")
-$remote="ec2-user@<EC2_IP>:<repo>/firmware/.build/bin/"
+$remote="ec2-user@<EC2_IP>:<repo>/firmware/dist/<version>/"
 scp "$remote*_QIO_*.bin" .\fw.bin
 tyutool_cli write -d t5ai -p $Port -b 460800 -f .\fw.bin   # 参数以 --help 为准
 ```
@@ -229,7 +233,7 @@ firmware-build:
     - . <TuyaOpen>/export.sh
     - tos.py clean -f && tos.py build
   artifacts:
-    paths: [firmware/.build/bin/*_QIO_*.bin, firmware/.build/bin/*_UG_*.bin]
+    paths: [firmware/dist/**/*_QIO_*.bin, firmware/dist/**/*_UG_*.bin]
     expire_in: 2 weeks
 
 companion-package:
@@ -251,7 +255,7 @@ companion-package:
 
 | # | 决策 | **结论** |
 |---|------|---------|
-| **D1** | EC2 规格与常驻方式 | ✅ **EC2 已就绪、常驻**。devbox = `ip-172-31-43-51`（Amazon Linux 2023），`ssh devbox` 可连；`/data` 200G(剩 189G)。TuyaOpen 在 `/data/projects/TuyaOpen`，`tos.py` 已验证可用。项目 clone 在 `/data/projects/tuya-powered-agentic-keyboard-for-kiro`。 |
+| **D1** | EC2 规格与常驻方式 | ✅ **EC2 已就绪、常驻**。devbox = `ip-172-31-43-51`（Amazon Linux 2023）；`/data` 200G。TuyaOpen 在 `/data/projects/TuyaOpen`，`tos.py check`、T5AI 平台下载及 `signal_light_demo` 全量构建均已验证。项目 clone 在 `/data/projects/tuya-powered-agentic-keyboard-for-kiro`。 |
 | **D2** | 固件 CI runner 形态 | ✅ **CI 暂缓**。含义澄清：D2 是"以后让 GitLab CI 自动编固件时，Runner 从哪来、怎么拿到 TuyaOpen 环境"。两种形态：(a) 把常驻 EC2 注册为 **shell runner**（复用已装 TuyaOpen，最省）；(b) 做含 TuyaOpen 的 **docker image**。**当前先手动在 EC2 `tos.py build`**，不上 CI；要上时选 (a)。 |
 | **D3** | Companion 编译 | ✅ **先本机编译**（不用 Linux 交叉编译；GitLab Runner 暂不试）。磁盘由开发者人工确认。Companion 是 Windows GUI，本机编译最便于调 SendInput/WinRT/麦克风。 |
 | **D4** | 本机取固件产物方式 | ✅ **scp 拉 bin + 一键烧录脚本**（`scripts/flash.ps1`）。 |
@@ -261,7 +265,7 @@ companion-package:
 | **D8** | GitLab Release 触发 | ✅ **暂缓**。含义澄清：Release = 给某 commit 打版本 tag，把编译产物(bin/安装包)作为附件挂在 GitLab Release 页做"正式版本快照"。触发方式：(a) 打 tag 自动 / (b) 手动。还涉及 artifacts `expire_in`(中间产物过期清理)。**等阶段 1 有可分发安装包后再启用**。 |
 
 > **重大发现（2026-08-25）**：EC2 上已有参考项目 **`signal_light_demo`**
-> （`/data/projects/tuya-powered-agentic-keyboard-for-kiro/signal_light_demo`）——同为 T5AI-Core 的
+> （`/data/projects/tuya-powered-agentic-keyboard-for-kiro/ref_projects/signal_light_demo`）——同为 T5AI-Core 的
 > "AI 编程助手键盘"（语音听写→UART 注入 PC + 状态灯 + OLED，联动 Claude Code/Codex），标准 TuyaOpen app
 > 结构，已含 `config/TUYA_T5AI_CORE.config`，`cd source/embedded && tos.py build` 可编。模块(signal_transport/
 > voice_key/led/agent_status/ws/oled)几乎就是本项目蓝图。**作为固件起点参考**：先编它跑通"EC2 编译→本机烧录"闭环，
@@ -300,12 +304,14 @@ companion-package:
 
 ## 8. 下一步（已确认路线）
 1. ✅ 决策点 D1–D8 已确认（见 §5）；EC2/TuyaOpen/tos.py 已验证可用。
-2. **打通"EC2 编译 → 本机烧录"闭环**：先在 EC2 编 `signal_light_demo`（或最小心跳）→ `flash.ps1` 拉 bin 烧录（T0）。
-3. **本机 `scripts/flash.ps1`** 就位（scp + tyutool 一键烧录 + 可选 monitor）。
+2. ✅ **EC2 编译已打通**：`ref_projects/signal_light_demo` 已生成
+   `dist/embedded_1.0.9/embedded_QIO_1.0.9.bin`。
+3. **完成本机烧录闭环（T0）**：运行已修正路径与产物搜索逻辑的
+   `scripts/flash.ps1`，验证 scp + tyutool + 460800 串口 monitor。
 4. **逐项做硬件测试程序**（§1.5）：T2 SPI-LCD（开发者起草）→ T3 按键 → T4 摇杆 → T5 WS2812 → T6 指示灯。
 5. 硬件验证 OK 后进正式 **固件 Task3-5**，并行 **Companion Task6-8**（本机编译）。
 6. CI/Release 待流程顺后再启用（§4，Runner 选 D2-a）。
 
 > 参考：`docs/implementation-plan.md`(16 任务)、`docs/prd.md`(§7 软件规格/风险)、
 > `shared/protocol/protocol.md`(协议 v1)、`tuya-kb/03-toolchain-setup/01-cloud-build-local-flash-windows.md`(云编译本地烧录)、
-> `ki-board/`(transport/protocol/ASR 可对照复用)。
+> `ref_projects/ki-board/`(transport/protocol/ASR 可对照复用)。
