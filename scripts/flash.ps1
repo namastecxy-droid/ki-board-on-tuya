@@ -8,7 +8,7 @@
   flashes and debugs. EC2 cannot see the local USB serial port, so flashing happens locally.
 
   Prerequisites (local Windows):
-    - WCH CH343SER driver installed (board uses CH342F -> two COM ports appear)
+    - WCH driver installed (expansion CH340C -> one COM; dev-board CH342F -> two COM ports)
     - tyutool CLI on PATH (or pass -TyuTool <path>). Download: https://tuyaopen.ai/tyutool
     - OpenSSH client (built into Win10/11) with an SSH host alias `devbox` configured
       (~/.ssh/config), matching how you run `ssh devbox`.
@@ -17,8 +17,7 @@
   Serial COM port to flash (e.g. COM5). If omitted, the script lists candidate ports and asks.
 
 .PARAMETER App
-  Remote app directory name under the project. Default: ref_projects/signal_light_demo/source/embedded
-  For our own tests later, pass e.g. -App "firmware/tests/lcd".
+  Remote app directory name under the project. Default: firmware/bringup/key1_uart
 
 .PARAMETER Build
   If set, run `tos.py build` on the devbox before pulling the bin.
@@ -35,7 +34,10 @@
   (by size + modification time recorded in fw.bin.meta).
 
 .PARAMETER Baud
-  Flash/monitor baud rate. T5 uses 460800 by default.
+  Flash baud rate. T5 uses 460800 by default.
+
+.PARAMETER MonitorBaud
+  Application monitor baud rate. Bring-up UART0 uses 115200 by default.
 
 .NOTES
   Download is skipped automatically when the local fw.bin already matches the
@@ -59,13 +61,13 @@
   Re-download the firmware even if it looks unchanged, then flash.
 
 .EXAMPLE
-  .\flash.ps1 -App "firmware/tests/lcd/source/embedded"
-  Flash a specific test app's bin.
+  .\flash.ps1 -Port COM5 -App "firmware/bringup/lcd_st7789"
+  Flash a specific bring-up app's bin.
 #>
 [CmdletBinding()]
 param(
     [string]$Port,
-    [string]$App = "ref_projects/signal_light_demo/source/embedded",
+    [string]$App = "firmware/bringup/key1_uart",
     [switch]$Build,
     [switch]$Monitor,
     # Skip the scp download entirely and flash the existing local fw.bin.
@@ -74,6 +76,7 @@ param(
     # Force a fresh download even if the local fw.bin already matches the remote.
     [switch]$Force,
     [int]$Baud = 460800,
+    [int]$MonitorBaud = 115200,
     [string]$SshHost = "devbox-ssm",
     [string]$RemoteProjectRoot = "/data/projects/tuya-powered-agentic-keyboard-for-kiro",
     [string]$TuyaOpenRoot = "/data/projects/TuyaOpen",
@@ -242,6 +245,6 @@ Ok "Flash complete."
 
 # --- 7. Optional monitor ---
 if ($Monitor) {
-    Info "Opening serial monitor on $Port @ $Baud (Ctrl+] or Ctrl+C to exit)"
-    & $TyuTool monitor -d $Device -p $Port -b $Baud
+    Info "Opening serial monitor on $Port @ $MonitorBaud (Ctrl+] or Ctrl+C to exit)"
+    & $TyuTool monitor -d $Device -p $Port -b $MonitorBaud
 }

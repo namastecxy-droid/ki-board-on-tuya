@@ -15,14 +15,14 @@
 
 ### 用法
 ```powershell
-# 拉最新 ref_projects/signal_light_demo 的 bin 并烧录到 COM5
+# 拉最新 firmware/bringup/key1_uart 的 bin 并烧录到 COM5
 .\flash.ps1 -Port COM5
 
 # 先在 devbox 上 tos.py build，再拉、再烧、再开监视
 .\flash.ps1 -Port COM5 -Build -Monitor
 
-# 烧录指定测试 app 的 bin（后续我们自己的测试程序）
-.\flash.ps1 -Port COM5 -App "firmware/tests/lcd/source/embedded"
+# 烧录指定 bring-up app 的 bin
+.\flash.ps1 -Port COM5 -App "firmware/bringup/lcd_st7789"
 
 # 不带 -Port 时会列出可用 COM 口并询问
 .\flash.ps1
@@ -32,10 +32,11 @@
 | 参数 | 默认 | 说明 |
 |------|------|------|
 | `-Port` | （询问） | 烧录串口，如 COM5 |
-| `-App` | `ref_projects/signal_light_demo/source/embedded` | devbox 上项目内的 app 目录 |
+| `-App` | `firmware/bringup/key1_uart` | devbox 上项目内的 app 目录 |
 | `-Build` | 关 | 拉 bin 前先在 devbox `tos.py build` |
 | `-Monitor` | 关 | 烧录后打开串口监视 |
-| `-Baud` | 460800 | T5 烧录/监视波特率 |
+| `-Baud` | 460800 | T5 烧录波特率 |
+| `-MonitorBaud` | 115200 | bring-up UART0 监视波特率 |
 | `-SshHost` | `devbox` | SSH 主机别名 |
 | `-RemoteProjectRoot` | `/data/projects/tuya-powered-agentic-keyboard-for-kiro` | 远端项目根 |
 | `-TuyaOpenRoot` | `/data/projects/TuyaOpen` | 远端 TuyaOpen 根（source export.sh） |
