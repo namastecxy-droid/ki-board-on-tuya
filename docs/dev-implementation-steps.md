@@ -4,7 +4,9 @@
 > 适配约束：**本机磁盘/算力有限** → 重编译放 **EC2 + GitLab Runner**；
 > **本机只负责固件烧录、串口调试、Companion 运行与手测**。
 > 基线现状（2026-08-25 核对）：
-> - `firmware/`：仅 README 骨架，**无 app 代码**，TuyaOpen SDK 未引入。
+> - `firmware/`：产品 app 尚未开始；阶段 0.5 bring-up 已建立，
+>   UART 回环、KEY1、全输入、ST7789、WS2812、Wi-Fi/BLE 共 6 个独立固件
+>   均使用项目 IO 并已构建成功，等待 Windows 实机按统一测试计划验收。
 > - TuyaOpen：`/data/projects/TuyaOpen` 已完成 `tos.py check`，子模块、T5AI 平台
 >   (`52c6e54b`) 与 GCC Arm 10.3 工具链已就绪；`ref_projects/signal_light_demo`
 >   使用 `TUYA_T5AI_CORE.config` 全量构建成功。
@@ -70,14 +72,16 @@
 > 目的：用一系列**独立、最小**的固件测试程序，逐个验证 PCB v1.0 的焊接/接线正确，
 > 在写业务逻辑前排除硬件问题。每个测试程序独立可编、可烧、可观测。
 > 编译在 EC2，烧录/观测在本机（`scripts/flash.ps1`）。
-> **建议先编现成的 `signal_light_demo` 跑通"编译→烧录"闭环**，再做下列本项目专属测试。
+> 本项目 bring-up 位于 `firmware/bringup/`，统一构建入口为 `build_all.sh`，
+> 实机验收顺序见 `TEST_PLAN.md`。`signal_light_demo` 只作代码结构和编译链路参考，
+> 不直接用于扩展底板验收（其 IO 与本项目 LCD 引脚冲突）。
 
 ### 测试序列（按依赖/风险递进）
 
 | # | 测试程序 | 验证的硬件 | EDA 依据 | 通过判据 |
 |---|---------|-----------|---------|---------|
-| **T0** | **编译+烧录闭环**（先编 signal_light_demo 或最小心跳） | CH340C(U3) 烧录链路 + UART0(P10/P11) + 电源 | netlist: UART0/CH340C/自动复位 | tyutool 烧录成功；串口 460800 见启动日志 |
-| **T1** | **串口回环/心跳** | UART0 收发、CH340C 通信 | R5(TX隔离)、Q2(复位) | PC 串口周期收到心跳；可下发字符回显 |
+| **T0** | **编译+烧录闭环**（`key1_uart`） | CH340C(U3) 烧录链路 + UART0(P10/P11) + 电源 | netlist: UART0/CH340C/自动复位 | tyutool 烧录成功；UART0 115200 收到 ready/heartbeat JSONL |
+| **T1** | **串口心跳 + KEY1**（`key1_uart`） | UART0 收发、CH340C 通信、KEY1=P24 | R5(TX隔离)、Q2(复位)、K1 | PC 周期收到心跳；按下/松开 KEY1 收到 down/up JSONL |
 | **T2** | **SPI-LCD 点屏**（ST7789） | LCD SPI(P14/P16/P15/P17)、RST(P6)、BL(P5)、PWR(P7)、FPC1 | pinmap §3 18P FPC、R11/R12 阻尼、背光 R1/Q1 | 屏亮、填色/色带/文字正常，无花屏；背光可控 |
 | **T3** | **按键扫描**（5× 茶轴 K1-5） | KEY1-5 = P24/P25/P26/P27/P23，内部上拉低有效 | pinmap §4、K1-5 | 每键按下/抬起串口打印正确、无抖动重复 |
 | **T4** | **摇杆扫描**（5 向 SW2） | NAV = P32/P20/P21/P22/P30（UP/DOWN/LEFT/RIGHT/CENTER） | pinmap §4、SW2(WS-1002)、U4 扩展焊盘 | 5 方向识别正确、公共端 GND OK、无串扰 |
@@ -87,13 +91,14 @@
 | **T8**（阶段2预备） | **Wi-Fi/BLE 自检** | T5 模组射频 | — | 扫到 AP / BLE 广播可见（为配网/BLE 传输铺路） |
 
 ### 每个测试程序的产物形态
-- 独立 TuyaOpen app（或在一个 test app 里用编译开关 `TEST_TARGET=lcd|key|nav|ws2812` 切换），
-  避免相互干扰；**每个都能单独 `tos.py build` 出 bin**。
-- 建议目录：`firmware/tests/<name>/`（EC2 编译；源码入库，bin 不入库）。
+- 独立 TuyaOpen app，避免相互干扰；**每个都能单独 `tos.py build` 出 bin**。
+- 目录：`firmware/bringup/<name>/`（EC2 编译；源码入库，bin 不入库）；
+  公共 IO 真值在 `firmware/bringup/common/include/agentic_board_io.h`。
 - 观测方式：串口日志（T1/T3/T4）、肉眼（T2/T5/T6/T7）、抓包（T8）。
 
-> **注**：T2 SPI-LCD 测试由开发者稍后在开发机起草（含固件代码 + EC2 build 命令，并参考 signal_light_demo
-> 的 display2/ 与官方 ST7789 接线）。本清单给出**依赖顺序与通过判据**，后续逐项落地。
+> **实现状态**：T0/T1 为 `key1_uart`（另有 `uart_loopback`），T2 为
+> `lcd_st7789`，T3/T4 合并为 `input_scan`，T5 为 `ws2812`，T8 为
+> `wireless_selftest`；T6/T7 是纯硬件手测。固件统一构建已通过，实板验收待执行。
 
 ---
 
@@ -306,8 +311,9 @@ companion-package:
 1. ✅ 决策点 D1–D8 已确认（见 §5）；EC2/TuyaOpen/tos.py 已验证可用。
 2. ✅ **EC2 编译已打通**：`ref_projects/signal_light_demo` 已生成
    `dist/embedded_1.0.9/embedded_QIO_1.0.9.bin`。
-3. **完成本机烧录闭环（T0）**：运行已修正路径与产物搜索逻辑的
-   `scripts/flash.ps1`，验证 scp + tyutool + 460800 串口 monitor。
+3. **完成本机烧录闭环（T0/T1）**：运行已修正路径与产物搜索逻辑的
+   `scripts/flash.ps1`，验证 scp + tyutool 烧录，并以 UART0 115200 观察
+   ready/heartbeat 与 KEY1 down/up JSONL。
 4. **逐项做硬件测试程序**（§1.5）：T2 SPI-LCD（开发者起草）→ T3 按键 → T4 摇杆 → T5 WS2812 → T6 指示灯。
 5. 硬件验证 OK 后进正式 **固件 Task3-5**，并行 **Companion Task6-8**（本机编译）。
 6. CI/Release 待流程顺后再启用（§4，Runner 选 D2-a）。
