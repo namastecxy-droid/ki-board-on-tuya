@@ -4,7 +4,9 @@
 > 适配约束：**本机磁盘/算力有限** → 重编译放 **EC2 + GitLab Runner**；
 > **本机只负责固件烧录、串口调试、Companion 运行与手测**。
 > 基线现状（2026-08-25 核对）：
-> - `firmware/`：产品 app 尚未开始；阶段 0.5 bring-up 已建立，
+> - `firmware/`：产品 app 已起步（`firmware/app/`，机制 A = 单 app + 共享核心 + per-variant config；
+>   Task 3 骨架 = v1.2 板级配置(WS2812→P4/SPI1, LCD_BL→P8) + UART0 `hello_ack`/心跳，EC2 `tos.py build` 通过，
+>   clang-format 门禁通过）；阶段 0.5 bring-up 已建立，
 >   UART 回环、KEY1、全输入、ST7789、WS2812、Wi-Fi/BLE 共 6 个独立固件
 >   均使用项目 IO 并已构建成功，等待 Windows 实机按统一测试计划验收。
 > - TuyaOpen：`/data/projects/TuyaOpen` 已完成 `tos.py check`，子模块、T5AI 平台
@@ -82,10 +84,10 @@
 |---|---------|-----------|---------|---------|
 | **T0** | **编译+烧录闭环**（`key1_uart`） | CH340C(U3) 烧录链路 + UART0(P10/P11) + 电源 | netlist: UART0/CH340C/自动复位 | tyutool 烧录成功；UART0 115200 收到 ready/heartbeat JSONL |
 | **T1** | **串口心跳 + KEY1**（`key1_uart`） | UART0 收发、CH340C 通信、KEY1=P24 | R5(TX隔离)、Q2(复位)、K1 | PC 周期收到心跳；按下/松开 KEY1 收到 down/up JSONL |
-| **T2** | **SPI-LCD 点屏**（ST7789） | LCD SPI(P14/P16/P15/P17)、RST(P6)、BL(P5)、PWR(P7)、FPC1 | pinmap §3 18P FPC、R11/R12 阻尼、背光 R1/Q1 | 屏亮、填色/色带/文字正常，无花屏；背光可控 |
+| **T2** | **SPI-LCD 点屏**（ST7789） | LCD SPI(P14/P16/P15/P17)、RST(P6)、BL(P8, v1.2 由 P5 迁入)、PWR(P7)、FPC1 | pinmap §3 18P FPC、R11/R12 阻尼、背光 R1/Q1 | 屏亮、填色/色带/文字正常，无花屏；背光可控 |
 | **T3** | **按键扫描**（5× 茶轴 K1-5） | KEY1-5 = P24/P25/P26/P27/P23，内部上拉低有效 | pinmap §4、K1-5 | 每键按下/抬起串口打印正确、无抖动重复 |
 | **T4** | **摇杆扫描**（5 向 SW2） | NAV = P32/P20/P21/P22/P30（UP/DOWN/LEFT/RIGHT/CENTER） | pinmap §4、SW2(WS-1002)、U4 扩展焊盘 | 5 方向识别正确、公共端 GND OK、无串扰 |
-| **T5** | **WS2812 灯效**（3 颗菊花链） | P13 → U2(SN74LV1T34 电平转换) → LED1-3(5V)、R3 串阻 | netlist WS2812 段、U2、R3 | 3 颗独立可控 RGB、颜色/顺序正确（验证电平转换有效） |
+| **T5** | **WS2812 灯效**（3 颗菊花链） | P4(SPI1_MOSI, v1.2 由 P13 迁入) → U2(SN74LV1T34 电平转换) → LED1-3(5V)、R3 串阻 | netlist WS2812 段、U2、R3 | 3 颗独立可控 RGB、颜色/顺序正确（验证电平转换有效） |
 | **T6** | **电源指示灯**（LED4/LED5） | LED4=VBUS 指示(R6)、LED5=电池指示(R10) | netlist 指示灯段 | 插 Type-C 亮 LED4；电池供电亮 LED5（纯硬件，肉眼验证，无需固件） |
 | **T7**（可选） | **电池/开关/充电** | BT1 电池座、SW1(SK12D07VG5) 电池总开关、并联 BAT 网 | PRD §3.4/§3.6 | 开关通断电池路径正确；Type-C 插入系统仍供电；⚠️ 只插一节电池 |
 | **T8**（阶段2预备） | **Wi-Fi/BLE 自检** | T5 模组射频 | — | 扫到 AP / BLE 广播可见（为配网/BLE 传输铺路） |
@@ -109,8 +111,8 @@
 ### Task 3 · 固件可编译烧录（心跳 + 板级 Config）
 **EC2：**
 1. 在 `firmware/` 基于 `TUYA_T5AI_CORE.config` 建最小 app（app 入口 + 串口打印心跳）。
-2. 落地板级引脚宏（对齐 PRD §7.1 / `hardware/pinmap/`）：LCD SPI(P14/P16/P15/P17/P6/P5/P7)、
-   KEY1-5(P24/P25/P26/P27/P23)、NAV(P32/P20/P21/P22/P30)、WS2812_DIN(P13)；分辨率 320×240。
+2. 落地板级引脚宏（对齐 PRD §7.1 / `hardware/pinmap/`）：LCD SPI(P14/P16/P15/P17/P6/P8/P7，v1.2 背光 P5→P8)、
+   KEY1-5(P24/P25/P26/P27/P23)、NAV(P32/P20/P21/P22/P30)、WS2812_DIN(P4=SPI1_MOSI，v1.2 由 P13 迁入)；分辨率 320×240。
 3. `tos.py clean -f && tos.py build` → 产 `dist/<version>/*_QIO_*.bin`（旧版可能为 `.build/bin/`）。
 **本机：**
 4. `scp ec2:<path>/dist/<version>/*_QIO_*.bin .` → tyutool/WebTool 烧录（460800，**开电源开关**）。
