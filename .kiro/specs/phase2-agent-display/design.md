@@ -102,7 +102,8 @@ NOTIFICATION_*→notif_store_* + notif_ui 刷新 / CONNECTED→取消 disconnect
 
 - **host 单测**(纯逻辑,x86 编译):`notification_store` add/dismiss/clear/去重/满溢;`input_map` 按键→事件映射表。
 - **构建验证**:EC2 `tos.py build` 出 bin。
-- **真机验证**(v1.2 板到手后):逐条走 R4 映射,核对屏显与 `[evt]` 日志;记入 phase2 的 TEST_RESULTS。
+- **真机验证**(v1.2 板):✅ 已通过(2026-09-05)——实物板逐条走 R4 映射,屏显(帧率/精灵透明边缘/背光 P8)与
+  `[evt]` 日志均符合预期,Agent 状态/通知切换正常。
 
 ## 8. 风险与决策
 

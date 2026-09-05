@@ -8,16 +8,16 @@
   - `ak_panel.c` 只注册面板(INVOFF 序列, rotation 90 → 320×240);`lv_vendor_init/start` 负责 open+双缓冲+旋转
   - `tuya_app_main.c` 画 "hello" label(deep bg + 紫标题)
   - **BUILD SUCCESS + clang-format clean**;实测 AP app 仅 **1.03MB / 3.5MB 上限**(LVGL 已含),精灵后估 ~2.15MB,余量充足
-  - 真机刷新验证待 v1.2 板到手(D1:LVGL 能挂本项目 ST7789 已在**编译层**确认,SDK 的 `lv_vendor`+TDD 路径可用)
+  - ✅ **真机已验证**(2026-09-05,v1.2 实物板):LVGL 挂本项目 ST7789(INVOFF/rotation 90/320×240)刷新正常
 
 - [x] **T2 — 精灵 runtime + 单动画渲染(R2.1)** ✅ 2026-09-05
   - 拷入 `app_rle_sprite.h` + `assets/generated/sprite_mascot_idle.h`(CodeTank 原样,vendored)
   - `ak_sprite.c/h`:RLE→RGB565A8 解码(透明键 0x18C5)+ `lv_image` + `lv_timer` 每 166ms 送帧,idle 16 帧循环
   - `tuya_app_main.c`:标题移到上/下端,中央跑 idle 吉祥物
-  - **BUILD SUCCESS + clang-format clean**;真机观感待板到手
+  - **BUILD SUCCESS + clang-format clean**;✅ 真机观感已验证(精灵透明边缘/帧率正常)
 
-- [ ] **T3 — 全动画注册表 + 场景引擎(R2.2/R2.3/R2.4)**
-  - 拷入全部 `sprite_mascot_*.h` + `sprite_mascot_registry.h`(D3:超 flash 则先核心子集)
+- [x] **T3 — 全动画注册表 + 场景引擎(R2.2/R2.3/R2.4)** ✅ 2026-09-05
+  - 拷入全部 `sprite_mascot_*.h` + `sprite_mascot_registry.h`(19 个动画全量,flash 余量充足)
   - 移植 `app_scene.c/h`,布局改 320×240 单会话(§4),接口 `scene_set_mascot_anim` / one-shot 回落
 
 - [x] **T4 — 通知子系统(R3)** ✅ 2026-09-05
