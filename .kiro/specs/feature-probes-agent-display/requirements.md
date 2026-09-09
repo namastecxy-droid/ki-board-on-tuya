@@ -1,4 +1,4 @@
-# P2-1 agent-display · Requirements
+# FP-1 agent-display · Requirements
 
 ## 背景与目标
 
@@ -11,7 +11,7 @@
 2. 把场景/动画/通知做成**可复用模块**,作为后期"氛围显示 / 三区 UI 的 Agent 区"的底座。
 
 **非目标**:不接 Wi-Fi/TCP、不接真实 Kiro/Codex 事件、不做语音、不做触摸交互。
-真实事件源在 P2-3(companion-link)接入。
+真实事件源在 FP-3(companion-link)接入。
 
 ## 术语
 
@@ -49,12 +49,12 @@
   - 5 向方向:直接选中某个具体动画;中心短按:idle↔sleeping 切换
 
 ### R5 — 自包含与工程约定
-- R5.1 THE test SHALL 是 `firmware/phase2/agent_display/` 下自包含 TuyaOpen app,`tos.py build` 可编译。
+- R5.1 THE test SHALL 是 `firmware/feature-probes/agent_display/` 下自包含 TuyaOpen app,`tos.py build` 可编译。
 - R5.2 THE test SHALL NOT 依赖 Wi-Fi、TCP、云或主机 Bridge。
 - R5.3 纯逻辑模块(通知 store、输入→事件映射)SHALL 带 host 单测,沿用现有 `run_host_tests.sh` 模式。
 
 ### R6 — 为氛围显示打基础(可复用性)
-- R6.1 场景/动画/通知模块 SHALL 以"事件驱动"接口暴露(输入 `app_event_t` → 更新显示),使 P2-3 能用真实事件源替换按键而不改显示层。
+- R6.1 场景/动画/通知模块 SHALL 以"事件驱动"接口暴露(输入 `app_event_t` → 更新显示),使 FP-3 能用真实事件源替换按键而不改显示层。
 - R6.2 移植代码 SHALL 保留 CodeTank 的 MIT 归属(见其 `LICENSES/clawd-tank-MIT.txt`)。
 
 ## 验收 (Definition of Done)
@@ -63,4 +63,4 @@
 - 发送键注入通知、取消键 dismiss/clear、backspace 切 connected/disconnected 均在屏上可见。
 - 每个事件串口有 `[evt]` 日志。
 - `tos.py build` 通过;host 单测(通知 store + 输入映射)全绿。
-- README 写清操作方式与预期;phase2 路线图更新。
+- README 写清操作方式与预期;feature-probes 路线图更新。
