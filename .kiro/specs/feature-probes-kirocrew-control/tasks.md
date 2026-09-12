@@ -30,11 +30,24 @@
     `KIROCREW_HOME` 与该文件一致（本机数据在 `/data/kiro`，网关靠 override）。
   - 若不可达 → 走兜底 (B)（D4 触发条件）。
 
-- [ ] **T-later-2 — companion "Kiro Crew driver"（Rust，reqwest）**
-  - 实现 session-control 客户端：`create`（带 agent）/`send`/`read`/`stop`，
-    带 `X-Internal-Secret` + `Origin` + caller `X-Session-Key`。
-  - 错误码映射（400/403/404/409/429）→ 回板 `ack`/错误帧（R4.3）。
-  - `.local_secret` 只驻内存，绝不写入被 git 跟踪文件（R6.3）。
+- [x] **T-later-2 — companion "Kiro Crew driver"（Rust，reqwest）** ✅ 2026-09-12
+  - `companion/src-tauri/src/kirocrew.rs`：`KiroCrewClient`（reqwest blocking，
+    pinned `=0.13.4` + `rustls`，无 openssl，Linux 可编）。
+    - `create_session(title,agent)->String` / `send(target,message)` /
+      `read(target)->String` / `stop(target)`，每次调用带
+      `X-Internal-Secret`（`.local_secret` 运行时读，仅驻内存，R6.3）+
+      `Origin: http://127.0.0.1:5476`（CSRF）。
+    - 纯 helper：`resolve_secret_path`（尊重 `KIROCREW_HOME`，否则
+      `~/.kiro/crew`）、`Op::url` + `create/send/read/stop_body`、
+      `parse_created_id` / `parse_reply` —— 全部无网络，单测覆盖。
+  - `lib.rs`：`#[cfg(windows)]` app 模块内新增 Tauri 命令
+    `kc_create/kc_send/kc_read/kc_stop`（已注册进 `invoke_handler`），
+    `Inner.kc_target` 缓存当前绑定会话；`handle_frame` 把板端 `macro`
+    文本帧经 `forward_asr_to_session` → `send()` 转发到绑定会话（D3：text→send）。
+  - 平台中立模块保持在 Windows 门控之外：Linux `cargo fmt/clippy/test` 通过
+    （clippy `-D warnings` 干净；41 tests passed，含 13 个新 `kirocrew` 单测）。
+  - 错误码映射（400/403/404/409/429）→ 由 `post()` 透传为可读错误串，供上层回板
+    `ack`/错误帧（R4.3）。**注**：Windows 真机端到端与凭据可达性仍待 T-later-1/6。
 
 - [ ] **T-later-3 — 绑定/目标选择 UI（React）**
   - 列 agent（`/api/agents/installed` 或本地读 `~/.kiro/agents/*.json`）+ 列会话
