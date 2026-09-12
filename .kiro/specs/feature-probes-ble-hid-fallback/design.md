@@ -134,6 +134,74 @@ ASCII→HID keycode 用一张查表（`a`–`z`=0x04–0x1D，`0`–`9`/符号/�
 Windows 枚举）作 spike，通过后再逐步推进 T2–T5；其中 **T3（SM 配对/绑定真机验证）是关键闸门**，
 失败即维持 NO-GO。
 
+## D10 — T1 spike 执行结果（2026-09-12，实做实编译）
+
+**判定：NO-GO（维持），并升级依据 —— 原生 NimBLE host API 在本 SDK 中不是 app 可用的头文件层，
+compile+link spike 无法在不修改 vendored SDK 头的前提下通过。**
+
+### 做了什么
+- 按 ble_gatt_link 模式 scaffold 了 `firmware/feature-probes/ble_hid_fallback/`
+  （`CMakeLists.txt` / `app_default.config` / `config/TUYA_T5AI_CORE.config` / `src/tuya_app_main.c`）。
+- `src/tuya_app_main.c` 用**原生 NimBLE** 写出完整合规 HOGP 骨架：`ble_gatts_count_cfg()` +
+  `ble_gatts_add_svcs()` 注册 HID `0x1812`（Report Map/HID Info/Ctrl Pt/Protocol Mode/Input Report）
+  + DIS `0x180A` + Battery `0x180F`；Input Report 挂 **Report Reference 描述符 `0x2908`**（原生
+  `ble_gatt_chr_def.descriptors` 字段，`ble_gatt.h:552`）+ `BLE_GATT_CHR_F_READ_ENC`；SM 经
+  `ble_hs_cfg.sm_bonding/sm_sc/sm_our_key_dist/...` + `store_*` 回调开启；广播用
+  `ble_gap_adv_set_fields()`（appearance `0x03C1` + 服务 `0x1812`）；发键用 `ble_gatts_notify_custom()`。
+  **所有被引用的函数/结构/常量均在头文件中逐一核实存在**（见下"API 核实"）。
+
+### 编译结果：BUILD FAILED（不是链接错，是**头文件层**根本进不去）
+`source export.sh && tos.py config choice -c TUYA_T5AI_CORE.config && tos.py clean -f && tos.py build`
+在编译 app 源文件 `tuya_app_main.c` 时报错（**编译单元的第 3 个文件即失败**，未走到链接）：
+
+1. **`LIST_HEAD` 宏冲突（-Werror 直接失败）**：NimBLE 的 `tuya_ble_linkqueue.h:266`
+   `#define LIST_HEAD(name, type)`（BSD queue 风格，**双参**）与 TuyaOS 的
+   `platform/T5AI/tuyaos/tuyaos_adapter/include/utilities/include/tuya_list.h:34`
+   `#define LIST_HEAD(name)`（**单参**）**定义不同、都无 `#ifndef` 守卫**，无法在同一编译单元共存。
+   而 **`ble_att.h:30` 就 `#include "tuya_ble_linkqueue.h"`**，`ble_gatt.h:31` 又 include `ble_att.h`——
+   即**任何** `ble_*.h` 一旦与 app 必需的 `tal_api.h`（其 `tal_event.h:31` → `tuya_list.h`）同时出现，
+   就必然撞宏。
+2. **host 私有头缺失**：`ble_hs.h:30 → hci_common.h:23 → tuya_ble.h:26/27` 里
+   `#include "tuya_ble_mempool.h"` / `tuya_ble_mbuf.h`，而 **`tuya_ble_mempool.h` 只存在于
+   `nimble/host/`（`LIB_PRIVATE_INC`，不导出给 app）**，app 编译时 `fatal error: No such file`。
+
+### 根因（这是本 spike 相对 D9 的新增硬证据）
+- SDK 的 `src/tal_bluetooth/CMakeLists.txt` 把 `nimble/include` 设为 PUBLIC，但把 `nimble/host`
+  设为 **PRIVATE**。而 `nimble/include` 里的 `ble_hs.h`/`ble_gap.h`/`ble_att.h` 又**传递依赖**
+  `host/` 里的私有头（mempool）与和 TuyaOS 冲突的 `linkqueue`（LIST_HEAD）。
+- **全 SDK grep `#include "ble_gap.h"`/`"ble_hs.h"` 的 13 个 `.c` 文件，无一例外全在
+  `nimble/host/`、`nimble/modules/` 或 `nimble/tkl_bluetooth.c` 内部**（这些编译单元把 `host/`
+  放在私有 include 路径上，故能编过）。**没有任何 app / example 从应用层 include 这些头** ——
+  原生 NimBLE host 根本不是本 SDK 对 app 暴露的编程界面。
+
+### 结论
+- **算法/协议层面仍然可行**：HID 描述符、Report Reference `0x2908`、SM 全套代码确实都在
+  vendored NimBLE 里（API 核实无误）。
+- **但工程上，在"只写 app 源、不碰 vendored SDK"的边界内，compile+link spike 无法通过**：
+  头文件既撞宏（LIST_HEAD）又缺私有头（mempool）。要么
+  (A) 把 HID 实现做进 SDK 内部（`src/tal_bluetooth/nimble/` 下新增 `ble_svc_hid.c` 之类，享有 host
+  私有 include，等同 fork/patch SDK），要么 (B) 上游给出 app 级 HOGP 端口。二者都超出"最小
+  probe + 不改 SDK"范畴。
+- 遵守 spike 准绳（不 fake、不留坏 build）：**probe 源码保留作证据**（它对着真实 API 写、逻辑完整），
+  但**清理 `.build/`**，不在树里留下编译失败产物。
+
+### API 核实（头文件 + 符号，均实读）
+| 能力 | 符号 | 头文件:行 |
+|---|---|---|
+| 注册带描述符的服务 | `ble_gatts_add_svcs` / `ble_gatts_count_cfg` | `ble_gatt.h:757 / 788` |
+| 特征描述符字段（表达 0x2908） | `struct ble_gatt_chr_def.descriptors` | `ble_gatt.h:552` |
+| 描述符定义结构 | `struct ble_gatt_dsc_def` | `ble_gatt.h`（chr_def 之后） |
+| 加密门禁读 | `BLE_GATT_CHR_F_READ_ENC` (`0x0200`) / `_READ_AUTHEN` (`0x0400`) | `ble_gatt.h:71/72` |
+| 发通知 | `ble_gatts_notify_custom` | `ble_gatt.h` |
+| SM 配置字段 | `ble_hs_cfg.sm_bonding/sm_sc/sm_io_cap/sm_our_key_dist/store_*_cb` | `ble_hs.h:190–` |
+| SM 密钥分发常量 | `BLE_SM_PAIR_KEY_DIST_ENC/ID` | `ble_sm.h:51/52` |
+| Just Works IO cap | `BLE_HS_IO_NO_INPUT_OUTPUT` (`0x03`) | `ble_hs.h:163` |
+| 广播设置/开始 | `ble_gap_adv_set_fields` / `ble_gap_adv_start` | `ble_gap.h:1131 / 1064` |
+| appearance 广播字段 | `ble_hs_adv_fields.appearance` | `ble_hs_adv.h` |
+| appearance/名字 设置 | `ble_svc_gap_device_appearance_set` / `_device_name_set` | `ble_svc_gap.h:47 / 45` |
+| **阻断：宏冲突** | `LIST_HEAD`（双参 vs 单参，无守卫） | `tuya_ble_linkqueue.h:266` ↔ `tuya_list.h:34`（经 `ble_att.h:30`） |
+| **阻断：私有头** | `tuya_ble_mempool.h` 仅在 `nimble/host/`（不导出） | 经 `ble_hs.h:30→hci_common.h:23→tuya_ble.h:27` |
+
 ## 偏差记录
 
 - 无。本 spec 先于任何代码产出（符合"feature-probes 一律先 spec"准绳）。

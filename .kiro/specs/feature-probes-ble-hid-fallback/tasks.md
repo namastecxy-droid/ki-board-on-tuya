@@ -1,7 +1,9 @@
 # FP-6 ble-hid-fallback · Tasks
 
 > 勾选规则：`[ ]` 未开始 / `[~]` 进行中 / `[x]` 完成。
-> **当前判定 = NO-GO（design.md D9）**：T0 已完成；T1–T5 为"转 GO 后"的实现路线，暂不启动。
+> **当前判定 = NO-GO（design.md D9 + D10）**：T0 判定 + T1 spike 均已执行（2026-09-12），
+> spike 在"不改 vendored SDK"边界内 compile+link **不通过**（头文件宏冲突 + 私有头缺失，见 D10/T1）。
+> T2–T5 为"转 GO 后"的实现路线，暂不启动。
 
 - [x] **T0 — 可行性判定（R0）** ✅ 2026-09-09
   - 调查 TAL vs 原生 NimBLE 两条路线，引证：
@@ -11,11 +13,22 @@
     - TAL 不能建带描述符的服务：`TKL_BLE_CHAR_PARAMS_T` 无描述符字段（`tkl_bluetooth_def.h:204`），`tal_bluetooth.h` 不导出建服务入口。
   - **结论：NO-GO（技术可行但非低风险，须手搓原生 NimBLE + 复刻 init）** → 不 scaffold 代码。
 
-- [ ] **T1 — （转 GO 前置 spike）原生 NimBLE 起栈 + keyboard 广播 + 空 HID 服务枚举（R1/R2 子集）**
-  - 建 `firmware/feature-probes/ble_hid_fallback/{src,config}` + `app_default.config` + `CMakeLists.txt` + `README.md`
-  - config：`ENABLE_GPIO/UART/BLUETOOTH=y`；复刻 `tkl_bluetooth.c` 的 HCI 起栈序列（**不** `tal_ble_bt_init`，避免双初始化）
-  - `ble_gatts_count_cfg`+`ble_gatts_add_svcs` 注册最小 GATT（GAP appearance=0x03C1 + 空 `0x1812`）
-  - **闸门**：Windows 蓝牙能扫到 `AK-KB-HID` 且识别为键盘类；不通则维持 NO-GO 并回填结论
+- [x] **T1 — （T1 spike，已执行 2026-09-12）原生 NimBLE 起栈 + keyboard 广播 + 空 HID 服务** → **结论 NO-GO（升级依据）**
+  - 已 scaffold `firmware/feature-probes/ble_hid_fallback/`（CMakeLists/config/app_default.config/src），
+    `src/tuya_app_main.c` 用原生 NimBLE 写出完整合规 HOGP 骨架（HID `0x1812`+Report Map+Input Report+
+    Report Reference `0x2908`+SM+appearance 广播），对着**已核实存在**的 API 编写（见 design.md D10 表）。
+  - **`tos.py build` = BUILD FAILED**，且不是链接错、而是**头文件层进不去**（app 源第 3 个编译单元即失败）：
+    1. **`LIST_HEAD` 宏冲突（-Werror）**：`ble_att.h:30`→`tuya_ble_linkqueue.h:266`（双参）与 app 必需
+       `tal_api.h`→`tuya_list.h:34`（单参）无守卫、定义不同，无法共存；`ble_gatt.h` 依赖 `ble_att.h`，
+       所以**任何 `ble_*.h` 都撞**。
+    2. **私有头缺失**：`ble_hs.h`→`hci_common.h`→`tuya_ble.h`→`tuya_ble_mempool.h`，该头**仅在
+       `nimble/host/`（不导出给 app）** → `fatal error: No such file`。
+    - 根因：全 SDK 只有 `nimble/host` / `modules` / `tkl_bluetooth.c` 内部 include 这些头（享私有 include
+      路径），**无任何 app/example 从应用层 include** → 原生 NimBLE host 不是本 SDK 的 app 编程界面。
+  - **闸门结果：不通过** → 维持 NO-GO。probe 源码**保留**作证据；**`.build/` 已清理**，不留坏构建。
+  - **转 GO 的唯二路径**：(A) 把 HID 实现做进 SDK 内部（`src/tal_bluetooth/nimble/` 下新增 `ble_svc_hid.c`，
+    享有 host 私有 include —— 等同 fork/patch SDK）；(B) 上游提供 app 级 HOGP 端口。二者都超出"最小 probe +
+    不改 vendored SDK"范畴，需专门排期与决策。
 
 - [ ] **T2 — 完整 HOGP GATT：Report Map + Input Report + 描述符（R2）**
   - HID Info/Report Map/Ctrl Pt/Protocol Mode + Input Report（挂 Report Reference `0x2908` + CCCD）
