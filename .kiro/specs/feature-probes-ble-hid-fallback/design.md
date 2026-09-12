@@ -202,6 +202,65 @@ compile+link spike 无法在不修改 vendored SDK 头的前提下通过。**
 | **阻断：宏冲突** | `LIST_HEAD`（双参 vs 单参，无守卫） | `tuya_ble_linkqueue.h:266` ↔ `tuya_list.h:34`（经 `ble_att.h:30`） |
 | **阻断：私有头** | `tuya_ble_mempool.h` 仅在 `nimble/host/`（不导出） | 经 `ble_hs.h:30→hci_common.h:23→tuya_ble.h:27` |
 
+## D11 — 隔离架构 compile+link 通过（2026-09-12，实做实编译）
+
+**判定：GO（compile+link 闸门通过）。D10 的 NO-GO 被推翻 —— 它的两个阻断都是"打包/编译单元"
+问题，不是能力缺失；用"每个编译单元只见一套头"的隔离架构即可在 0 改 SDK 的前提下编过并链接。**
+
+### 关键洞察（相对 D10 的纠正）
+D10 把 blocker 归因于"原生 NimBLE host 不是 app 编程界面"。这个结论过强：真正的根因是
+**D10 的 spike 把 `tal_api.h` 和 `ble_*.h` 塞进了同一个 `.c`（`tuya_app_main.c`）**，于是两套
+`LIST_HEAD` 宏在同一 TU 相遇必撞。只要把两套头**拆到不同编译单元**，冲突就不存在 —— 头文件本身
+是可用的，缺的只是 `nimble/host` 的私有 include 路径（probe 级 CMake 即可补，无需碰 SDK）。
+
+### 隔离架构（本 cycle 落地）
+| 文件 | 只 include | 作用 |
+|---|---|---|
+| `src/ak_ble_hid.c` | **仅** `ble_*.h` / `tuya_ble_mbuf.h`（nimble 头），**绝不** `tal_api.h`/`tuya_list.h` | 全部原生 HOGP：GATT 表(HID 0x1812+Report Map+Input Report+`0x2908`+DIS+BAS)、SM、原生广播、`ble_gattc_notify_custom` 发键 |
+| `include/ak_ble_hid.h` | **纯 C**（`stdint.h`/`stdbool.h`），无任何 nimble/TAL 类型 | 桥接 API：`ak_ble_hid_init/ready/connected/send_char/send_key/send_text` |
+| `src/tuya_app_main.c` | **仅** `tal_api.h` + `ak_ble_hid.h`，**绝不** nimble 头 | TAL 起栈(`tal_ble_bt_init`)、`TAL_BLE_STACK_INIT` 回调里调 `ak_ble_hid_init()`、按键→桥接 API、状态 LCD |
+
+因两套头永不共处一个 TU，D10 的两个阻断都消解：
+1. **blocker #1（LIST_HEAD 宏冲突）** → 消失：`ak_ble_hid.c` 只见 `tuya_ble_linkqueue.h` 的双参
+   `LIST_HEAD`，`tuya_app_main.c` 只见 `tuya_list.h` 的单参，两者不相遇。（已核实 `nimble/include`
+   下无任何头 `#include "tuya_list.h"`。）
+2. **blocker #2（私有头 `tuya_ble_mempool.h` 缺失）** → 在 **probe CMakeLists** 给 `ak_ble_hid.c`
+   的 include 路径追加 `${OPEN_SDK_ROOT}/src/tal_bluetooth/nimble/host`（及 `.../include`）即补齐。
+   **未改任何 SDK 文件**，`nimble/host` 只是被本 probe 的编译命令引用。
+
+### 编译结果：BUILD SUCCESS（compile + link 均过）
+`source export.sh && tos.py config choice -c TUYA_T5AI_CORE.config && tos.py clean -f && tos.py build`
+```
+====================[ BUILD SUCCESS ]===================
+ Target : ble_hid_fallback_QIO_0.1.0.bin   Board : TUYA_T5AI_CORE
+ ap size 864256, limit 3670016            （AP 余量充足）
+```
+产物 `dist/ble_hid_fallback_0.1.0/*.bin`（QIO/UA/UG）齐全。
+
+**非桩验证**：`arm-none-eabi-nm ak_ble_hid.c.o` 显示以下原生符号均为 `U`（未定义、由链接解析），
+即代码真的调用了它们、且链接器在 `libtal_bluetooth.a` 里全部找到：
+`ble_gatts_add_svcs` / `ble_gatts_count_cfg` / `ble_gattc_notify_custom` /
+`ble_gap_adv_set_fields` / `ble_gap_adv_start` / `ble_svc_gap_device_appearance_set` /
+`ble_svc_gap_device_name_set` / `ble_hs_mbuf_from_flat` / `os_mbuf_append` / `ble_uuid_u16` /
+`tuya_ble_hs_cfg`。
+
+### 相对 D10 API 表的两处修正（实编译发现）
+- **发通知符号**：本 SDK 公有头**无** `ble_gatts_notify_custom`；GATT server 发通知走
+  `ble_gattc_notify_custom(conn, att_handle, om)`（`ble_gatt.h:473`，库中 `T`）。已改用之。
+- **SM 全局配置名**：本 SDK 把全局重命名为 `tuya_ble_hs_cfg`（`ble_hs.h:286`，**无** `ble_hs_cfg`
+  别名），字段名不变（`sm_io_cap/sm_bonding/sm_sc/sm_our_key_dist/store_*_cb`）。已改用之。
+
+### 结论与边界
+- **compile+link 闸门通过（GO）**，且**零 SDK 改动**（probe-local CMake include dir 是唯一机制，
+  与主线 FP-2/3/4/5 构建完全隔离）。
+- 仍**未在真机验证**：广播真起、Windows 枚举、Just Works 配对/复连（design D7/T3）是硬件测试，
+  留待用户。`.build/`/`dist/` 已被 `.gitignore` 排除（`firmware/**/.build/`、`firmware/**/dist/`），
+  不污染仓库。
+- 主线不受影响：本 probe 的 include dir 只作用于本 probe 目标，SDK 的 `src/tal_bluetooth/CMakeLists.txt`
+  的 PUBLIC/PRIVATE 划分未动。
+
 ## 偏差记录
 
 - 无。本 spec 先于任何代码产出（符合"feature-probes 一律先 spec"准绳）。
+- D10（NO-GO）与 D11（GO）并存保留：D10 是"单 TU 塞两套头"的失败证据，D11 是"隔离架构"的成功
+  证据 —— 二者对照正是本 probe 的核心结论（阻断在打包，不在能力）。
