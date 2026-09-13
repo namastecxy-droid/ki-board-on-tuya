@@ -149,13 +149,19 @@ press focuses the bound conversation, long press binds the CURRENT conversation
 to that slot. This is a STABLE per-conversation binding, not the position-based
 `Alt+N` jump (which stays as the empty-slot / fallback behavior).
 
-**Chat URL scheme (reversed from the SPA):** a conversation is navigable at
-`/chat/<slug>?sid=<slug>` (also `/chat/<key>`). So focusing a bound conversation
-= navigating the window to `http://127.0.0.1:<port>/chat/<slug>`, stable across
-sidebar reordering.
+**Chat focus (client-side, no reload):** the Kiro Crew dashboard is a
+history/pushState SPA, so navigating its **address bar** (`Ctrl+L` + type +
+Enter) triggers a FULL page reload every time — bad UX. Its OWN in-app
+navigation (Command Bar / search) is client-side and does NOT reload. So we
+focus a bound conversation by typing its **title** into the client-side Command
+Bar (`Ctrl+K` + title + Enter), which navigates in-app with no reload. URL
+navigation is kept only as a manual fallback.
 
 **Bind store:** three slots persisted to `config_dir/ak-companion/binds.json`:
-`{ slot: 1..3, url: Option<String>, label: Option<String> }`.
+`{ slot: 1..3, url: Option<String>, label: Option<String> }`. `label` is the
+PRIMARY handle — the conversation TITLE typed into the command bar; `url` is the
+optional `/chat/<slug>` manual-navigate fallback. A slot is "bound" when EITHER
+is non-empty.
 
 **Long/short split (stateless, from the firmware's own classification):** the
 `ak_input_fsm` already emits a one-shot `long` at ~800 ms plus `down`/`up`
@@ -170,21 +176,32 @@ slot). They are stateful IO, executed in `lib.rs` (Windows) against the bind
 store + controller, not in the pure router.
 
 **Controller (Windows) additions:**
-- `capture_current_url() -> Option<String>`: focus, Ctrl+L (address bar), Ctrl+A,
-  Ctrl+C, read the clipboard, Esc; parse a `/chat/<slug>` URL out of it. Clipboard
-  read via a small crate (`arboard`) or Win32. Returns None if no chat URL found.
-- `navigate_url(url)`: focus, Ctrl+L, type url, Enter.
+- `capture_current_title() -> Option<String>`: focus, then read the window title
+  via `GetWindowTextLengthW`/`GetWindowTextW`. Reads only — no clipboard, no
+  navigation, so it cannot reload. Returns None when the title is empty.
+- `strip_conversation_title(raw) -> String` (pure): take the segment before the
+  first of `" -- "`, `" - "`, `" | "`, `" · "`, or a bare `"·"`, trimmed — drops
+  the `" - Kiro Crew - <Browser>"` / `"· Kiro Crew"` app/browser suffix, leaving
+  the chat title.
+- `navigate_url(url)`: focus, Ctrl+L, type url, Enter — kept as the manual
+  fallback only.
 
 **lib.rs execution:**
-- `FocusSlot(n)`: look up slot n. Has url -> `navigate_url`. Empty -> `chord(NewChat)`
-  (Alt+Shift+N) per §3.2 "empty slot -> create new session".
-- `BindSlot(n)`: `capture_current_url()` -> store into slot n (label = slug) ->
-  emit a `display` frame `{state:"bound", text:"K<n> -> <label>"}` so the board LCD
-  confirms the bind (M3 renders it). (Unbind-confirm from §3.2 is a later refinement.)
+- `FocusSlot(n)`: look up slot n. Non-empty label -> `command_bar(label)`
+  (client-side, no reload). Else url present -> `navigate_url(url)` (manual
+  fallback). Else -> `chord(NewChat)` (Alt+Shift+N) per §3.2 "empty slot ->
+  create new session".
+- `BindSlot(n)`: `capture_current_title()` -> `strip_conversation_title` -> store
+  into slot n as the LABEL (url = None) -> emit a `display` frame
+  `{state:"bound", text:"K<n> -> <label>"}` so the board LCD confirms the bind
+  (M3 renders it). (Unbind-confirm from §3.2 is a later refinement.)
 
-**UI:** Local Control panel shows the 3 bindings (slot -> label/url) with
-edit/clear + a "bind current" button mirroring a long press.
+**UI:** Local Control panel shows the 3 bindings (slot -> title/url) with
+edit/clear + a "bind current" button mirroring a long press. The edit field is
+primarily the conversation TITLE; a `/chat/<slug>` URL is accepted for the
+manual fallback.
 
-**Honest limits:** URL capture assumes a browser with an address bar (Ctrl+L); a
-desktop client without one falls back to the `Alt+N` position jump. The
-`held_ms` threshold must match the firmware's `AK_FSM_LONG_PRESS_MS`.
+**Honest limits:** title capture reads whatever the OS reports as the focused
+window's title; a window with a non-standard or truncated title binds a
+non-matching label. The `held_ms` threshold must match the firmware's
+`AK_FSM_LONG_PRESS_MS`.
