@@ -29,7 +29,7 @@
   .\scripts\sync-local-secret.ps1 -Remote devbox
 #>
 param(
-    [string]$Remote     = "devbox",
+    [string]$Remote     = "devbox-ssm",
     [string]$RemotePath = "/data/kiro/.kiro/crew/.local_secret",
     [string]$LocalPath  = "$HOME\.kiro\crew\.local_secret"
 )
