@@ -21,19 +21,26 @@ Legend: [ ] todo · [x] done · [~] partial/seam
     quick chords (Enter/Esc/arrows). Match ki-board style.
 
 ## Milestone 2 — Status read (companion, "the eyes")
-- [ ] **T5 — Pure `map_hook_event` (Linux-tested)**
+- [x] **T5 — Pure `map_hook_event` (Linux-tested)**
   - `HookEvent -> DisplayState` (agentSpawn→running, postToolUse→tool+<tool_name>,
     stop→idle+<assistant_response trunc>). Unit tests, no IO.
-- [ ] **T6 — `status_sink.rs` localhost HTTP ingress (Windows-gated runtime)**
-  - Bind 127.0.0.1:<port>; require `X-AK-Status-Token`; parse body → `map_hook_event`;
-    keep last-status per `session_id`; push to UI + emit `display` frame.
+- [x] **T6 — `status_sink.rs` localhost HTTP ingress (cross-platform server)**
+  - Bind 127.0.0.1:<port> with `tiny_http` (sync, reader-thread + stop-flag);
+    require `X-AK-Status-Token`; parse body → `map_hook_event`; keep last-status
+    per `session_id`; push to UI + emit `display` frame.
   - `status_sink_start/stop`, `status_token()` commands.
-- [ ] **T7 — Hook script + sample agent config (under `scripts/`)**
-  - `scripts/ak-hook-status.ps1` (+ `.sh`): STDIN hook JSON + `$KIRO_SESSION_ID`
-    → POST to the sink with token; exit 0 fast.
-  - Document the `hooks` snippet the user adds to their LOCAL agent config.
-- [ ] **T8 — UI: Status area**
-  - Start/stop sink, show token to paste into the hook, live per-session status list.
+  - Generate a random token; write `{port,token}` to a handoff file
+    (`%LOCALAPPDATA%\ak-companion\hook.json` / `~/.config/ak-companion/hook.json`).
+- [x] **T7 — `companion --hook` mode + sample agent config (Decision 2)**
+  - Hook is a MODE of this binary, not a shell script: `main.rs` runs the hook
+    handler and `exit(0)` before Tauri when argv has `--hook`. Reads STDIN hook
+    JSON + `$KIRO_SESSION_ID`, reads the handoff file, POSTs to the sink with the
+    token; absent sink → silent exit 0. Cross-platform (reqwest blocking).
+  - Document the `hooks` snippet the user adds to their LOCAL agent config
+    (in the Status panel hint + this design doc).
+- [x] **T8 — UI: Status area**
+  - Start/stop sink, show token + the exact `companion --hook` command and an
+    example `hooks` JSON, live per-session status list (`kc-status` event).
 
 ## Milestone 3 — Reflect to the board (firmware follow-on)
 - [ ] **T9 — `firmware/app` renders the `display` frame**

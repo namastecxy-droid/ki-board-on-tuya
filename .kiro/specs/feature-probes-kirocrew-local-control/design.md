@@ -43,20 +43,29 @@ fn route_input(ev: &BoardEvent, ctx: &ControlCtx) -> ControlAction
 Table-driven map (R2.3): K4+recognized-text→CommandBar; K5→Chord(Enter);
 nav→arrows; K1–K3→CommandBar("<session name>"). No IO — testable.
 
-### `status_sink.rs` — localhost status ingress (Windows-gated runtime, pure mapping testable)
-- A tiny HTTP listener bound to **127.0.0.1:<port>** (reuse the app's async runtime;
-  a minimal `tiny_http`-style loop or `tauri`'s bundled hyper — prefer a dependency
-  already present; otherwise `tiny_http`). Requires header `X-AK-Status-Token`
-  matching a token the companion generated at startup and the hook script reads.
-- Body = the hook event JSON (or a slimmed `{event, session_id, tool_name?,
-  assistant_response?}`). A **pure** `map_hook_event(&HookEvent) -> DisplayState`
-  does the mapping (unit-tested):
+### `status_sink.rs` — localhost status ingress (cross-platform server, pure mapping)
+- A tiny **synchronous** HTTP listener bound to **127.0.0.1:<port>** using the
+  `tiny_http` crate (pinned `=0.12.0`) on a background thread — mirrors the
+  `transport::usb_serial` reader-thread + stop-flag lifecycle; the app stays
+  sync (no new async runtime). Requires header `X-AK-Status-Token` matching a
+  token the companion generates at sink start (via `getrandom`, 32 hex chars)
+  and writes to the handoff file. A wrong/absent token → `401`, callback not
+  fired.
+- The server + handoff + `--hook` client are **cross-platform** (no
+  `#[cfg(windows)]`), so `cargo check` / `cargo test` build them on Linux. Only
+  the callback that emits a `display` frame (needs the Tauri transport) is
+  Windows-gated, in `lib.rs::app`.
+- Body = the slimmed `{event, session_id, tool_name?, assistant_response?}`
+  (`HookEvent`, tolerant to Kiro's `hook_event_name`/`sessionId`/`toolName`
+  spellings via serde aliases). A **pure** `map_hook_event(&HookEvent) ->
+  DisplayState` does the mapping (unit-tested, one test per branch):
   - `agentSpawn` → `{state:"running", text:"agent started"}`
-  - `postToolUse` → `{state:"tool", text:"using <tool_name>"}`
-  - `stop` → `{state:"idle", text:<assistant_response truncated>}`
-  - `userPromptSubmit`/`preToolUse` → optional finer states.
-- On each event: keep last-status per `session_id`; emit a `display` frame for the
-  bound/active session; push to the UI.
+  - `postToolUse` → `{state:"tool", text:"using <tool_name>"}` (`using tool` when absent)
+  - `stop` → `{state:"idle", text:<assistant_response flattened+truncated 40ch>}` (`done` when empty)
+  - `userPromptSubmit` → `{state:"received", text:"prompt received"}`
+  - anything else → `{state:"running", text:<event>}`
+- On each event: keep last-status per `session_id` (`Inner.kc_status`); emit a
+  `display` frame; push a `kc-status` UI event `{session_id,agent_name,state,text}`.
 
 ### `lib.rs` wiring (Windows-gated app module)
 - Tauri commands: `kc_bind_window(title)`, `kc_send_text`, `kc_command_bar`,
@@ -65,20 +74,42 @@ nav→arrows; K1–K3→CommandBar("<session name>"). No IO — testable.
 - Status events → `map_hook_event` → `write_board(display_payload)` (reuse the
   existing `send_display`).
 
-## Kiro-Crew-side hook script (not this repo's runtime; shipped under `scripts/`)
-`scripts/ak-hook-status.(ps1|sh)`:
-- Reads hook JSON from STDIN, extracts `hook_event_name`, `tool_name`,
-  `assistant_response`, and `$KIRO_SESSION_ID`.
-- POSTs `{event,session_id,tool_name?,assistant_response?}` to
-  `http://127.0.0.1:<port>/status` with `X-AK-Status-Token`.
-- Exits 0 fast (never blocks the agent turn; short timeout).
+## Kiro-Crew-side hook: `companion --hook` mode (Decision 2)
 
-Sample agent config snippet (documented in the spec, applied by the user to their
-LOCAL agent `~/.kiro/agents/<name>.json`):
+**Decision 2 (supersedes the earlier `scripts/ak-hook-status.(ps1|sh)` plan):**
+the Kiro agent hook is a **mode of the companion binary itself**, invoked as
+`companion --hook` — NOT a separate shell script. This removes the shell-vs-
+PowerShell portability split and keeps one artifact to ship.
+
+Flow:
+- **GUI / sink side.** When the user starts the sink (`status_sink_start`), the
+  companion binds `127.0.0.1:<port>`, generates a random token, and writes a
+  **handoff file** `{port, token}` to a stable location:
+  - Windows: `%LOCALAPPDATA%\ak-companion\hook.json`
+  - else: `~/.config/ak-companion/hook.json`
+  (resolved via `dirs::config_dir()`, `HOME/.config` fallback).
+- **Hook side (`companion --hook`).** `main.rs` checks argv **before** launching
+  Tauri: if `--hook` is present it runs the hook handler and `exit(0)` without
+  starting the GUI. The handler:
+  1. reads the Kiro hook JSON from **STDIN** (tolerant: empty/unparseable →
+     default event);
+  2. fills `session_id` from `$KIRO_SESSION_ID` when the body omitted it;
+  3. reads the handoff file for `{port, token}` — **absent → silent `exit 0`**
+     (no sink running is not an error, must never fail the agent turn);
+  4. POSTs the slimmed event to `http://127.0.0.1:<port>/status` with header
+     `X-AK-Status-Token: <token>`, **short 800ms timeout**, best-effort;
+  5. exits 0 fast.
+- This path is **cross-platform** (no `#[cfg(windows)]`, reuses `reqwest`
+  blocking) so it `cargo check`s / `cargo test`s on the Linux CI host.
+
+Sample agent config snippet (user applies to their LOCAL agent
+`~/.kiro/agents/<name>.json`; the token lives in the handoff file, not here):
 ```json
-{ "hooks": { "agentSpawn": [{"command":"…/ak-hook-status.ps1"}],
-             "postToolUse":[{"command":"…/ak-hook-status.ps1"}],
-             "stop":       [{"command":"…/ak-hook-status.ps1"}] } }
+{ "hooks": {
+    "agentSpawn":  [{"command":"\"C:/path/to/companion.exe\" --hook"}],
+    "postToolUse": [{"command":"\"C:/path/to/companion.exe\" --hook"}],
+    "stop":        [{"command":"\"C:/path/to/companion.exe\" --hook"}]
+} }
 ```
 
 ## Protocol
