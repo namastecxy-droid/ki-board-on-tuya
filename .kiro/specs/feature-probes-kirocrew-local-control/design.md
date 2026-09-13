@@ -141,67 +141,73 @@ KIRO CREW panel becomes **Local Control**:
 - The controller injects into whatever window matches the title; `focus()` verifies
   the match before injecting (AC1.5) to avoid typing into the wrong app.
 
-## Milestone 4 — per-conversation binding (interaction-design §3.2)
+## Milestone 4 — per-key jump-to-chat number (interaction-design §3.2)
 
-Implements the real "bind a specific conversation to a key" from
-`docs/agentic-keyboard-interaction-design.md` §3.2 (K1-K3 = Agent slots): short
-press focuses the bound conversation, long press binds the CURRENT conversation
-to that slot. This is a STABLE per-conversation binding, not the position-based
-`Alt+N` jump (which stays as the empty-slot / fallback behavior).
+Implements the "bind a key to an agent slot" from
+`docs/agentic-keyboard-interaction-design.md` §3.2 (K1-K3 = Agent slots) as a
+**configurable per-key chat NUMBER**. Each of K1/K2/K3 binds to a chat number
+(`1..=9`, the digit in Kiro Crew's "Alt+N = Jump to chat N" shortcut). A short
+press fires `Alt+<that number>` — a deterministic, client-side, **no-reload**
+jump. The number is user-configurable per key and persisted.
 
-**Chat focus (client-side, no reload):** the Kiro Crew dashboard is a
+**Decision (supersedes the earlier title-capture design):** the previous M4
+approach — capture the focused window's TITLE on long-press, strip the
+app/browser suffix, persist it as a `label`, and focus by typing that title into
+the client-side Command Bar (with a `/chat/<slug>` URL as a manual fallback) —
+was **removed per user decision**. It was replaced by the simpler, fully
+deterministic per-key chat-number model below. The removed machinery was:
+`ControlAction::FocusSlot`/`BindSlot`, the router's long/short split for K1-K3,
+`capture_current_title` / `strip_conversation_title` / `navigate_url` on the
+controller, and `parse_chat_slug` + the `Slot{url,label}` store shape.
+
+**Why Alt+N is a client-side jump:** the Kiro Crew dashboard is a
 history/pushState SPA, so navigating its **address bar** (`Ctrl+L` + type +
-Enter) triggers a FULL page reload every time — bad UX. Its OWN in-app
-navigation (Command Bar / search) is client-side and does NOT reload. So we
-focus a bound conversation by typing its **title** into the client-side Command
-Bar (`Ctrl+K` + title + Enter), which navigates in-app with no reload. URL
-navigation is kept only as a manual fallback.
+Enter) triggers a FULL page reload — bad UX. Its OWN keyboard shortcut
+`Alt+N` navigates in-app and does NOT reload, so a chat-number jump is both
+deterministic (position-bound, not title-matched) and reload-free.
 
-**Bind store:** three slots persisted to `config_dir/ak-companion/binds.json`:
-`{ slot: 1..3, url: Option<String>, label: Option<String> }`. `label` is the
-PRIMARY handle — the conversation TITLE typed into the command bar; `url` is the
-optional `/chat/<slug>` manual-navigate fallback. A slot is "bound" when EITHER
-is non-empty.
+**Bind store:** `config_dir/ak-companion/binds.json` holds
+`{ "chats": [1, 2, 3] }` — a fixed-length array of three chat numbers, index 0 =
+K1 … index 2 = K3. Defaults to `[1, 2, 3]`. On load the vector is normalized to
+length 3 and every entry clamped to `1..=9` (missing / out-of-range entries fall
+back to the slot's default number). `BindStore::{get(slot), set(slot, number),
+clear(slot)}` are 1-based; `set` clamps into `1..=9`, `clear` resets to the
+slot's default (index + 1).
 
-**Long/short split (stateless, from the firmware's own classification):** the
-`ak_input_fsm` already emits a one-shot `long` at ~800 ms plus `down`/`up`
-(with `held_ms`). The pure router decides without state:
-- K1-K3 `Long`                          -> `BindSlot(n)`
-- K1-K3 `Up` with `held_ms < LONG_MS`   -> `FocusSlot(n)`   (short tap)
-- K1-K3 `Up` with `held_ms >= LONG_MS`  -> `None`           (tail of a long press; bind already fired)
-- K1-K3 `Down`                           -> `None`           (wait for release/long, so a long press does NOT focus-then-clobber)
+**Router (pure, stateless, from the firmware's own classification):** K1-K3 fire
+on `Down` ONLY, so one physical press produces exactly one jump; the `Long` and
+`Up` edges of the same press are no-ops.
+- K1-K3 `Down`  -> `Chord(JumpChat(n))` where `n = ctx.jump_chats[idx]` (1..=9); `None` if the index is missing or `n` is out of `1..=9`
+- K1-K3 `Long`  -> `None`
+- K1-K3 `Up`    -> `None`
 
-New `ControlAction`s: `FocusSlot(u8)`, `BindSlot(u8)` (both carry the 1-based
-slot). They are stateful IO, executed in `lib.rs` (Windows) against the bind
-store + controller, not in the pure router.
+`ControlCtx.jump_chats: Vec<u8>` is the source the router reads; `lib.rs` keeps
+it in sync with the persisted `BindStore.chats`. There are no `FocusSlot` /
+`BindSlot` actions any more — a K1-K3 press resolves to a plain
+`Chord(JumpChat(n))` and flows through the ordinary `KiroCrewController::apply`
+path with no stateful special-casing.
 
-**Controller (Windows) additions:**
-- `capture_current_title() -> Option<String>`: focus, then read the window title
-  via `GetWindowTextLengthW`/`GetWindowTextW`. Reads only — no clipboard, no
-  navigation, so it cannot reload. Returns None when the title is empty.
-- `strip_conversation_title(raw) -> String` (pure): take the segment before the
-  first of `" -- "`, `" - "`, `" | "`, `" · "`, or a bare `"·"`, trimmed — drops
-  the `" - Kiro Crew - <Browser>"` / `"· Kiro Crew"` app/browser suffix, leaving
-  the chat title.
-- `navigate_url(url)`: focus, Ctrl+L, type url, Enter — kept as the manual
-  fallback only.
+**lib.rs execution + commands:**
+- Startup: `BindStore::load()` seeds both the store and `kc_router.ctx.jump_chats`.
+- `kc_bind_get() -> Vec<u8>`: the three chat numbers.
+- `kc_bind_set(slot, number)`: validate `1..=9`, persist, and update the LIVE
+  `kc_router.ctx.jump_chats` so the next board press uses the new number without
+  a restart.
+- `kc_bind_clear(slot)`: reset the slot to its default number (slot index + 1),
+  persist, update the live router context.
+- (`kc_bind_current` removed — there is no "bind the current conversation"
+  operation in the number model.)
 
-**lib.rs execution:**
-- `FocusSlot(n)`: look up slot n. Non-empty label -> `command_bar(label)`
-  (client-side, no reload). Else url present -> `navigate_url(url)` (manual
-  fallback). Else -> `chord(NewChat)` (Alt+Shift+N) per §3.2 "empty slot ->
-  create new session".
-- `BindSlot(n)`: `capture_current_title()` -> `strip_conversation_title` -> store
-  into slot n as the LABEL (url = None) -> emit a `display` frame
-  `{state:"bound", text:"K<n> -> <label>"}` so the board LCD confirms the bind
-  (M3 renders it). (Unbind-confirm from §3.2 is a later refinement.)
+**Controller (Windows):** unchanged for jumps — `Chord::JumpChat(n)` injects
+`Alt+<n>` via the existing `inject_chord` (`alt_tap(0x30 + n)`). The
+title-capture / navigate helpers were removed.
 
-**UI:** Local Control panel shows the 3 bindings (slot -> title/url) with
-edit/clear + a "bind current" button mirroring a long press. The edit field is
-primarily the conversation TITLE; a `/chat/<slug>` URL is accepted for the
-manual fallback.
+**UI:** the Bindings panel shows, per key K1/K2/K3, a NUMBER selector (1–9)
+reading `K<slot> -> Alt+<n> (jump to chat n)`, loaded via `kc_bind_get` on mount;
+changing the selector calls `kc_bind_set(slot, number)`, and a "Reset to <n>"
+button calls `kc_bind_clear(slot)`. Neobrutalist style + existing invoke pattern.
 
-**Honest limits:** title capture reads whatever the OS reports as the focused
-window's title; a window with a non-standard or truncated title binds a
-non-matching label. The `held_ms` threshold must match the firmware's
-`AK_FSM_LONG_PRESS_MS`.
+**Honest limits:** the jump targets Kiro Crew's chat *position* N, not a stable
+conversation identity — if the user reorders chats, `Alt+N` follows the position,
+not the original conversation. This is the deliberate trade for a fully
+deterministic, no-reload, no-title-matching binding.

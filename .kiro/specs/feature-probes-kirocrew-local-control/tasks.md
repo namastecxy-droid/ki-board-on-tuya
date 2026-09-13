@@ -52,27 +52,46 @@ Legend: [ ] todo · [x] done · [~] partial/seam
     (running=green/tool=orange/idle=gray/received=cyan) + agent/state lines +
     wrapped ASCII text. Both UART + BLE profiles BUILD SUCCESS.
 
-## Milestone 4 — per-conversation binding (§3.2)
+## Milestone 4 — per-key jump-to-chat number (§3.2)
+Model: each of K1-K3 binds to a chat NUMBER (1..9). Short press -> `Alt+<number>`
+(Kiro Crew "Jump to chat N", client-side, NO reload). The number is configurable
+per key, persisted in `binds.json` as `{"chats":[1,2,3]}`. The earlier
+title-capture / command-bar-by-title / long-press-bind design was REMOVED per
+user decision (see design.md M4 "Decision").
 - [x] **T10 — deterministic shortcut foundation** (Alt+N/Prev/Next/FocusInput/
   NewChat chords + Compose for K4 voice). DONE (commit ab2ef24).
-- [x] **T11 — pure router long/short split**
-  - `ControlAction::{FocusSlot(u8), BindSlot(u8)}`; K1-K3 `Long`->BindSlot,
-    short `Up`(held<LONG_MS)->FocusSlot, `Down`/long-tail->None. Unit tests.
-- [x] **T12 — bind store** (`config_dir/ak-companion/binds.json`, 3 slots) +
-    load/save; pure (de)serialize tests.
-- [x] **T13 — controller URL capture/navigate (Windows)**
-  - `capture_current_url()` (Ctrl+L/Ctrl+A/Ctrl+C + clipboard read + parse
-    `/chat/<slug>`), `navigate_url()` (Ctrl+L+type+Enter). Clipboard via arboard.
-- [x] **T14 — lib.rs execution + LCD echo**
-  - FocusSlot->navigate or NewChat; BindSlot->capture+store+`display` frame
-    `bound`; commands + handle_frame wiring.
-- [x] **T15 — UI: bindings panel** (3 slots label/url, edit/clear, bind-current).
+- [x] **T11 — pure router: K1-K3 Down -> Alt+configured-number**
+  - K1-K3 `Down` -> `Chord(JumpChat(n))` where n = `ctx.jump_chats[idx]` (1..9);
+    `None` when the index is missing or n is out of 1..9. K1-K3 `Long`/`Up` ->
+    `None` (jump fires on Down only). `FocusSlot`/`BindSlot` + the long/short
+    split REMOVED. Unit tests assert the configured-number jump and the None edges.
+- [x] **T12 — bind store: 3 chat NUMBERS** (`BindStore{chats:Vec<u8>}`, default
+    `[1,2,3]`, `config_dir/ak-companion/binds.json` `{"chats":[..]}`) + load/save,
+    get/set(clamp 1..9)/clear(reset to default), normalize-to-3 tests. `Slot{url,
+    label}` + `parse_chat_slug` REMOVED.
+- [x] **T13 — controller cleanup (Windows)**
+  - REMOVED `capture_current_title`, `strip_conversation_title` (+ tests),
+    `navigate_url`, and the now-unused `VK_L`/`ctrl_tap` helpers. Kept
+    `JumpChat`/`PrevChat`/`NextChat`/`FocusInput`/`NewChat` + `inject_chord`,
+    `command_bar` (still a UI button), `compose`, `send_text`, `chord`, `focus`.
+    Stub + facade dropped the removed methods. (arboard was already absent.)
+- [x] **T14 — lib.rs execution + commands**
+  - Inner loads the 3 numbers from `BindStore` at startup and seeds
+    `kc_router.ctx.jump_chats`. exec: all actions via `kc_controller.apply` (no
+    `FocusSlot`/`BindSlot` special-casing). `kc_bind_get() -> Vec<u8>`;
+    `kc_bind_set(slot, number)` validates 1..9, saves, and updates the live
+    router ctx; `kc_bind_clear(slot)` resets to the slot default + updates ctx.
+    `kc_bind_current` REMOVED. `describe_control_action` dropped the slot arms.
+- [x] **T15 — UI: bindings panel** per key K1/K2/K3 a NUMBER selector (1..9)
+    reading `K<n> -> Alt+<n> (jump to chat n)`; loaded via `kc_bind_get` on mount;
+    on change calls `kc_bind_set(slot, number)`; "Reset to <n>" -> `kc_bind_clear`.
+    Neobrutalist style + existing invoke pattern.
 
 ## Verification gates
 - Linux each milestone: `cargo check` + `cargo test` (T2, T5, T11, T12 pure tests) +
   `tsc --noEmit` + `vite build`.
 - Windows (user): `tauri build`; live focus/inject; hook POST round-trip; board LCD;
-  bind (long-press) + focus (short-press) round-trip against a real chat URL.
+  K1-K3 short press jumps to the configured chat number (`Alt+N`, no reload).
 
 ## Notes / decisions
 - Supersedes FP-4 Route A (`session-control`, `caller_unidentified`) — see
