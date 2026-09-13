@@ -3,20 +3,20 @@
 Legend: [ ] todo · [x] done · [~] partial/seam
 
 ## Milestone 1 — Control MVP (companion, "the hands")
-- [ ] **T1 — `kirocrew_control.rs` KeyInputBackend (Windows-gated)**
+- [x] **T1 — `kirocrew_control.rs` KeyInputBackend (Windows-gated)**
   - `KiroCrewController { focus, send_text, command_bar, chord }` over raw `user32`
     FFI, reusing `inject.rs` VK-injection helpers.
   - `focus()`: enumerate top-level windows, match configurable title substring,
     `SetForegroundWindow`; verify match before any inject (AC1.5).
   - `command_bar(cmd)`: Ctrl+K → type cmd → Enter. `chord(Chord)`: named VK chords.
   - Non-Windows stub compiles + is a no-op/Err.
-- [ ] **T2 — Pure `ControlRouter` (Linux-tested)**
+- [x] **T2 — Pure `ControlRouter` (Linux-tested)**
   - `route_input(&BoardEvent, &ControlCtx) -> ControlAction`, table-driven map
     (K4→CommandBar(text), K5→Enter, nav→arrows, K1–K3→session jump). No IO. Unit tests.
-- [ ] **T3 — Tauri commands + handle_frame wiring (Windows-gated)**
+- [x] **T3 — Tauri commands + handle_frame wiring (Windows-gated)**
   - `kc_bind_window`, `kc_send_text`, `kc_command_bar`, `kc_chord`; register them.
   - `handle_frame`: board events → `route_input` → controller; log `[KC-CTL] …`.
-- [ ] **T4 — UI: KIRO CREW panel → Local Control**
+- [x] **T4 — UI: KIRO CREW panel → Local Control**
   - Bind-window input + focus indicator; free-text + Send / Command-Bar buttons;
     quick chords (Enter/Esc/arrows). Match ki-board style.
 
