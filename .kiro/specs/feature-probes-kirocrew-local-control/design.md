@@ -15,6 +15,20 @@ companion module. Neither touches `session-control` or the webhook.
    (agentSpawn/postToolUse/stop, carries KIRO_SESSION_ID)
 ```
 
+> **Control gate (2026-09-13).** `control_enabled` (default OFF) gates **ALL**
+> board actions toward the PC / Kiro Crew, not just route-B key injection. When
+> OFF, no board frame triggers anything: key/nav frames skip the ControlRouter
+> AND the FP-5 K4 voice frame does NOT activate Win+H — the INPUT view only
+> reflects trigger state. The board ACK send and the `[RX]` log stay ungated
+> (protocol/UI, not a Kiro Crew trigger). When ON, board keys drive Kiro Crew and
+> K4 voice activates OS dictation (Win+H).
+>
+> **Route A removed (2026-09-13).** The FP-4 session-control HTTP client
+> (`kirocrew.rs`, `KiroCrewClient`, `kc_target`, `kc_create`/`kc_send`/`kc_read`/
+> `kc_stop`, `resolve_target`, `forward_asr_to_session` + both `handle_frame` call
+> sites, and the legacy UI panel) is DELETED — it was proven non-functional
+> (`caller_unidentified`). Route B (the hands) is the sole control path.
+
 ## Companion modules (Rust / Tauri)
 
 ### `kirocrew_control.rs` — KeyInputBackend (Windows-gated)

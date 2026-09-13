@@ -95,6 +95,23 @@ user decision (see design.md M4 "Decision").
 
 ## Notes / decisions
 - Supersedes FP-4 Route A (`session-control`, `caller_unidentified`) — see
-  requirements Context. Route A code is left in place but not the control path.
+  requirements Context. **Route A code is now DELETED** (2026-09-13): removed
+  `kirocrew.rs`, the `KiroCrewClient` import, the `kc_target` Inner field,
+  `kc_client`/`kc_create`/`kc_send`/`kc_read`/`kc_stop`, the `resolve_target`
+  helper, `forward_asr_to_session` + both call sites (the `Asr` and route-A
+  `Macro` forward blocks in `handle_frame`), the four commands from
+  `invoke_handler`, and the "Session Control — route A (legacy, HTTP)" UI section
+  (`kcAgent`/`kcTarget`/`kcMessage`/`kcReply`/`runKc`/`kcBind`/`kcSend`/`kcRead`/
+  `kcStop`). Route B (K4 `Macro -> Compose` via `kc_router.route`) is unaffected.
+- **`control_enabled` now gates ALL board actions toward the PC/Kiro Crew**
+  (2026-09-13). Previously it gated only the route-B key-injection block while the
+  FP-5 K4 voice (Win+H) activation fired regardless. Now the FP-5 `Voice` block is
+  wrapped in the same `control_enabled` gate: control OFF => board keys/nav/voice
+  ONLY reflect trigger state in the INPUT view (board ACK + `[RX]` log stay
+  ungated, they are protocol/UI, not a Kiro Crew trigger); control ON => board keys
+  drive Kiro Crew AND K4 voice activates Win+H.
+- INPUT view layout: `.nav-cell` label style now matches the K1-K5 `.key-screen`
+  tiles (11px / 700); every `.key-screen` uses a fixed `height: 44px` (aspect-ratio
+  rules removed) so wide K4 is the SAME height as K5, only wider (spans 2 columns).
 - Webhook (`/api/hooks/agent`) intentionally unused: send-only, no status read.
 - Assumes a **local** gateway (no tunnel); remote hook delivery is out of scope.
