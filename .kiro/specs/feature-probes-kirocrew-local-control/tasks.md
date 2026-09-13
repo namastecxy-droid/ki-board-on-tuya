@@ -55,18 +55,18 @@ Legend: [ ] todo · [x] done · [~] partial/seam
 ## Milestone 4 — per-conversation binding (§3.2)
 - [x] **T10 — deterministic shortcut foundation** (Alt+N/Prev/Next/FocusInput/
   NewChat chords + Compose for K4 voice). DONE (commit ab2ef24).
-- [ ] **T11 — pure router long/short split**
+- [x] **T11 — pure router long/short split**
   - `ControlAction::{FocusSlot(u8), BindSlot(u8)}`; K1-K3 `Long`->BindSlot,
     short `Up`(held<LONG_MS)->FocusSlot, `Down`/long-tail->None. Unit tests.
-- [ ] **T12 — bind store** (`config_dir/ak-companion/binds.json`, 3 slots) +
+- [x] **T12 — bind store** (`config_dir/ak-companion/binds.json`, 3 slots) +
     load/save; pure (de)serialize tests.
-- [ ] **T13 — controller URL capture/navigate (Windows)**
+- [x] **T13 — controller URL capture/navigate (Windows)**
   - `capture_current_url()` (Ctrl+L/Ctrl+A/Ctrl+C + clipboard read + parse
     `/chat/<slug>`), `navigate_url()` (Ctrl+L+type+Enter). Clipboard via arboard.
-- [ ] **T14 — lib.rs execution + LCD echo**
+- [x] **T14 — lib.rs execution + LCD echo**
   - FocusSlot->navigate or NewChat; BindSlot->capture+store+`display` frame
     `bound`; commands + handle_frame wiring.
-- [ ] **T15 — UI: bindings panel** (3 slots label/url, edit/clear, bind-current).
+- [x] **T15 — UI: bindings panel** (3 slots label/url, edit/clear, bind-current).
 
 ## Verification gates
 - Linux each milestone: `cargo check` + `cargo test` (T2, T5, T11, T12 pure tests) +
