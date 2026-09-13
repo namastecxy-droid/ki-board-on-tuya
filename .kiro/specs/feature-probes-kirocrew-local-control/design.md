@@ -135,7 +135,56 @@ KIRO CREW panel becomes **Local Control**:
   round-trip, `display` on the board.
 
 ## Security notes
+
 - Status sink binds 127.0.0.1 only + shared-token header (AC3.4): a network-exposed
   unauthenticated listener would let any local process spoof board status.
 - The controller injects into whatever window matches the title; `focus()` verifies
   the match before injecting (AC1.5) to avoid typing into the wrong app.
+
+## Milestone 4 — per-conversation binding (interaction-design §3.2)
+
+Implements the real "bind a specific conversation to a key" from
+`docs/agentic-keyboard-interaction-design.md` §3.2 (K1-K3 = Agent slots): short
+press focuses the bound conversation, long press binds the CURRENT conversation
+to that slot. This is a STABLE per-conversation binding, not the position-based
+`Alt+N` jump (which stays as the empty-slot / fallback behavior).
+
+**Chat URL scheme (reversed from the SPA):** a conversation is navigable at
+`/chat/<slug>?sid=<slug>` (also `/chat/<key>`). So focusing a bound conversation
+= navigating the window to `http://127.0.0.1:<port>/chat/<slug>`, stable across
+sidebar reordering.
+
+**Bind store:** three slots persisted to `config_dir/ak-companion/binds.json`:
+`{ slot: 1..3, url: Option<String>, label: Option<String> }`.
+
+**Long/short split (stateless, from the firmware's own classification):** the
+`ak_input_fsm` already emits a one-shot `long` at ~800 ms plus `down`/`up`
+(with `held_ms`). The pure router decides without state:
+- K1-K3 `Long`                          -> `BindSlot(n)`
+- K1-K3 `Up` with `held_ms < LONG_MS`   -> `FocusSlot(n)`   (short tap)
+- K1-K3 `Up` with `held_ms >= LONG_MS`  -> `None`           (tail of a long press; bind already fired)
+- K1-K3 `Down`                           -> `None`           (wait for release/long, so a long press does NOT focus-then-clobber)
+
+New `ControlAction`s: `FocusSlot(u8)`, `BindSlot(u8)` (both carry the 1-based
+slot). They are stateful IO, executed in `lib.rs` (Windows) against the bind
+store + controller, not in the pure router.
+
+**Controller (Windows) additions:**
+- `capture_current_url() -> Option<String>`: focus, Ctrl+L (address bar), Ctrl+A,
+  Ctrl+C, read the clipboard, Esc; parse a `/chat/<slug>` URL out of it. Clipboard
+  read via a small crate (`arboard`) or Win32. Returns None if no chat URL found.
+- `navigate_url(url)`: focus, Ctrl+L, type url, Enter.
+
+**lib.rs execution:**
+- `FocusSlot(n)`: look up slot n. Has url -> `navigate_url`. Empty -> `chord(NewChat)`
+  (Alt+Shift+N) per §3.2 "empty slot -> create new session".
+- `BindSlot(n)`: `capture_current_url()` -> store into slot n (label = slug) ->
+  emit a `display` frame `{state:"bound", text:"K<n> -> <label>"}` so the board LCD
+  confirms the bind (M3 renders it). (Unbind-confirm from §3.2 is a later refinement.)
+
+**UI:** Local Control panel shows the 3 bindings (slot -> label/url) with
+edit/clear + a "bind current" button mirroring a long press.
+
+**Honest limits:** URL capture assumes a browser with an address bar (Ctrl+L); a
+desktop client without one falls back to the `Alt+N` position jump. The
+`held_ms` threshold must match the firmware's `AK_FSM_LONG_PRESS_MS`.
