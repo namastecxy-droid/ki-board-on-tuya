@@ -43,9 +43,14 @@ Legend: [ ] todo · [x] done · [~] partial/seam
     example `hooks` JSON, live per-session status list (`kc-status` event).
 
 ## Milestone 3 — Reflect to the board (firmware follow-on)
-- [ ] **T9 — `firmware/app` renders the `display` frame**
+- [x] **T9 — `firmware/app` renders the `display` frame**
   - Merge the FP-1 LCD renderer into `firmware/app`; add a `display`-frame handler
     (agent_name/state/text). Build both UART + BLE profiles. (Separate work item.)
+  - DONE: rendered via the lightweight shared ak_gfx + ak_statuslcd (no LVGL,
+    consistent with FP-2/FP-3) rather than FP-1's LVGL sprite UI. display frame
+    -> ak_render_status(agent,state,text): title bar colored by state
+    (running=green/tool=orange/idle=gray/received=cyan) + agent/state lines +
+    wrapped ASCII text. Both UART + BLE profiles BUILD SUCCESS.
 
 ## Verification gates
 - Linux each milestone: `cargo check` + `cargo test` (T2, T5 pure tests) +
