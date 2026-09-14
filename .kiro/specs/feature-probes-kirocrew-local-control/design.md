@@ -79,15 +79,17 @@ nav→arrows; K1–K3→CommandBar("<session name>"). No IO — testable.
   - `stop` → `{state:"idle", text:<assistant_response flattened+truncated 40ch>}` (`done` when empty)
   - `userPromptSubmit` → `{state:"received", text:"prompt received"}`
   - anything else → `{state:"running", text:<event>}`
-- On each event: keep last-status per `session_id` (`Inner.kc_status`); emit a
-  `display` frame; push a `kc-status` UI event `{session_id,agent_name,state,text}`.
+- On each event: keep last-status per `session_id` (`Inner.kc_status`); resolve
+  every persisted Chat A/B/C association for that session; emit one slot-addressed
+  `display` frame per association; push a `kc-status` UI event
+  `{session_id,agent_name,state,text}` even when the session is unbound.
 
 ### `lib.rs` wiring (Windows-gated app module)
 - Tauri commands: `kc_bind_window(title)`, `kc_send_text`, `kc_command_bar`,
   `kc_chord`, `status_sink_start(port)` / `status_sink_stop`, `status_token()`.
 - `handle_frame`: board events → `route_input` → `KiroCrewController`.
-- Status events → `map_hook_event` → `write_board(display_payload)` (reuse the
-  existing `send_display`).
+- Status events → `map_hook_event` → persisted session-to-slot lookup →
+  `write_board(display_payload(chat_slot, ...))`. Unbound sessions remain UI-only.
 
 ## Kiro-Crew-side hook: `companion --hook` mode (Decision 2)
 
@@ -135,7 +137,9 @@ non-AK hooks and top-level webhook registrations, and is idempotent. Because the
 running gateway keeps this store in memory, an external Companion update becomes
 active only after **Apply & Restart** (or a Crew restart).
 ## Protocol
-- Reuses the existing `display` frame `{v,type:"display",payload:{agent_name,state,text}}`.
+- Extends `display` with required slot routing:
+  `{v,type:"display",payload:{chat_slot,agent_name,state,text}}`, where
+  `chat_slot` 1/2/3 means Chat A/B/C. Firmware rejects missing/invalid slots.
 - No new board→PC frame; control is out-of-band (keystrokes to Kiro Crew, not the board).
 - Optional: extend `display.state` enum documentation with `running|tool|idle`.
 
