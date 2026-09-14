@@ -182,12 +182,13 @@ Enter) triggers a FULL page reload — bad UX. Its OWN keyboard shortcut
 deterministic (position-bound, not title-matched) and reload-free.
 
 **Bind store:** `config_dir/ak-companion/binds.json` holds
-`{ "chats": [1, 2, 3] }` — a fixed-length array of three chat numbers, index 0 =
-K1 … index 2 = K3. Defaults to `[1, 2, 3]`. On load the vector is normalized to
-length 3 and every entry clamped to `1..=9` (missing / out-of-range entries fall
-back to the slot's default number). `BindStore::{get(slot), set(slot, number),
-clear(slot)}` are 1-based; `set` clamps into `1..=9`, `clear` resets to the
-slot's default (index + 1).
+`{ "chats": [1, 2, 3], "aliases": ["", "", ""] }`. Both arrays have three
+entries, index 0 = K1 / slot A through index 2 = K3 / slot C. Chat numbers
+default to `[1, 2, 3]`; aliases default to empty, which means the AK renders
+A, B, or C. On load, old files without `aliases` migrate automatically, vector
+lengths are normalized, invalid chat numbers return to their defaults, and
+invalid aliases return to empty. Aliases are trimmed, ASCII-only, and limited
+to 7 characters to fit the 64-pixel AK sidebar.
 
 **Router (pure, stateless, from the firmware's own classification):** K1-K3 fire
 on `Down` ONLY, so one physical press produces exactly one jump; the `Long` and
@@ -205,6 +206,10 @@ path with no stateful special-casing.
 **lib.rs execution + commands:**
 - Startup: `BindStore::load()` seeds both the store and `kc_router.ctx.jump_chats`.
 - `kc_bind_get() -> Vec<u8>`: the three chat numbers.
+- `kc_bind_aliases_get() -> Vec<String>`: optional aliases for A/B/C.
+- `kc_bind_alias_set(slot, alias)`: validate and persist one alias, then send a
+  `bindings` frame immediately when connected. `connect_device` also sends all
+  stored aliases after `hello`, so offline edits and board restarts recover.
 - `kc_bind_set(slot, number)`: validate `1..=9`, persist, and update the LIVE
   `kc_router.ctx.jump_chats` so the next board press uses the new number without
   a restart.
@@ -217,10 +222,11 @@ path with no stateful special-casing.
 `Alt+<n>` via the existing `inject_chord` (`alt_tap(0x30 + n)`). The
 title-capture / navigate helpers were removed.
 
-**UI:** the Bindings panel shows, per key K1/K2/K3, a NUMBER selector (1–9)
-reading `K<slot> -> Alt+<n> (jump to chat n)`, loaded via `kc_bind_get` on mount;
-changing the selector calls `kc_bind_set(slot, number)`, and a "Reset to <n>"
-button calls `kc_bind_clear(slot)`. Neobrutalist style + existing invoke pattern.
+**UI + AK display:** each K1/K2/K3 title row contains an alias input followed by
+the existing chat-number selector. Alias edits save on blur or Enter. Empty aliases
+show placeholders for defaults A/B/C. The AK centers the effective label below each
+sidebar icon and reuses it in the selected-session heading and key feedback; custom
+aliases replace the default letters without changing the Alt+number routing.
 
 **Honest limits:** the jump targets Kiro Crew's chat *position* N, not a stable
 conversation identity — if the user reorders chats, `Alt+N` follows the position,

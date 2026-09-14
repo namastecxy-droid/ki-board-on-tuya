@@ -9,18 +9,17 @@
 
 - [x] **FP-3 · tuya-cloud-asr**(板载云 ASR)✅ — HOLD/PTT、设备激活与 2.4G Wi-Fi、`AI_USER_EVT_ASR_OK` → UART0 `asr` JSONL 均已实现并真机通过（2026-09-13 用户确认）。
 
-- [ ] **FP-4 · kirocrew-control**(companion→Crew)
-  - spec;Rust 连 Gateway `:5476` REST+WS;四类操作(绑定/输入/发送/切换)+ 事件订阅回流
-  - 审批 approve_once/reject + 双端一致 + 断线 `list_slots()` 重建
-  - 验收:companion 收到板端文字 → 进 Crew 当前对话;Crew 状态回流(先打印,后接 FP-1 显示层)
+- [ ] **FP-4 · kirocrew-control**(companion→Crew；Hook 待完成)
+  - ✅ 本地控制已完成：K1–K3 `Alt+N` 切换会话、K4 输入、K5 提交、摇杆快捷键
+  - ⏳ Hook 尚缺：实际安装 → Kiro 事件接收 → 状态映射 → BLE/USB `display` 回流 → LCD 显示
+  - 验收：在真实 Kiro Crew 会话中走通 Hook 状态回流，并确认断开/重启后的恢复行为
 
-- [ ] **FP-5 · pc-asr-activate**(PC ASR)
-  - spec;板键 `VOICE_PC_*` → companion WinRT ASR → 文字进 Crew(复用 FP-4 注入路径)
-  - 验收:按键说话 → Windows ASR 文字进 Crew
+- [x] **FP-5 · pc-asr-activate**(PC ASR)✅ — Win+H 系统听写激活、cloud/system 路由、
+  companion/固件接线与自动降级均已实现，Windows 真机验收通过（2026-09-14 用户确认）。
 
-- [ ] **FP-6 · ble-hid-fallback**(兜底,独立)
-  - spec;原生 NimBLE HID(描述符+SM/配对)独立固件;输入文字+回车+快捷键切换
-  - 验收:无 companion,板子被 PC 识别为键盘并能输入/发送/切换
+- [ ] **FP-6 · ble-hid-fallback**(兜底,独立；暂缓处理)
+  - compile+link GO；原生 NimBLE HID/HOGP/SM/发键代码已就位
+  - 真机配对、复连和键入验收留待后续处理
 
 - [ ] **FP-7 · mvp-integration**(端到端)
   - spec;无线+双 ASR+控制 Crew 串起;FP-1 显示层接真实 Crew 事件(状态/通知/审批区)
@@ -28,9 +27,9 @@
 
 ## 推荐推进顺序
 1. ~~**FP-2 BLE GATT + FP-3 云 ASR**~~ ✅ 已完成并真机通过→
-2. **FP-4 / FP-5 Windows 验收**（companion 控制、系统 ASR）→
-3. **FP-7 整合** + FP-1 显示层接真实事件 →
-4. **FP-6 BLE HID 真机闸门**（配对、复连、发键）
+2. ~~**FP-5 PC ASR Windows 验收**~~ ✅ 已完成并真机通过→
+3. **FP-4 Windows 验收 + FP-7 整合**，FP-1 显示层接真实事件 →
+4. **FP-6 BLE HID 真机闸门**（已明确暂缓，后续再处理）
 
 ## 每个 probe 的门禁(沿用项目约定)
 `tos.py build` 通过 · clang-format clean · 纯逻辑 host 单测 · check_pins(涉及引脚时)· README(操作/预期)。

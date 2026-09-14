@@ -87,6 +87,16 @@ user decision (see design.md M4 "Decision").
     on change calls `kc_bind_set(slot, number)`; "Reset to <n>" -> `kc_bind_clear`.
     Neobrutalist style + existing invoke pattern.
 
+## Milestone 5 — Hook runtime integration and acceptance
+- [ ] **T16 — Hook installation → status sink → board/LCD end-to-end**
+  - 在实际 Kiro Crew agent 配置中安装 Hook，确认 `agentSpawn`、`userPromptSubmit`、
+    `postToolUse`、`stop` 事件能够调用 companion `--hook` 模式。
+  - 验证 handoff 文件、token、localhost status sink、session pin/filter 和 `display`
+    帧在真实运行环境中工作，而不只是 host 单测通过。
+  - 分别通过 USB 与 BLE 将状态回传到产品固件，确认 LCD 的 agent/state/history 更新。
+  - 验证 companion、sink 或板端断开并恢复后 Hook 链路可重新工作。
+  - **状态：待完成/验收（2026-09-14 用户确认 FP-4 仍缺 Hook 部分）。**
+
 ## Verification gates
 - Linux each milestone: `cargo check` + `cargo test` (T2, T5, T11, T12 pure tests) +
   `tsc --noEmit` + `vite build`.
