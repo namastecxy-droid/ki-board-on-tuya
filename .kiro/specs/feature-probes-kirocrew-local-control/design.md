@@ -117,17 +117,18 @@ Flow:
 - This path is **cross-platform** (no `#[cfg(windows)]`, reuses `reqwest`
   blocking) so it `cargo check`s / `cargo test`s on the Linux CI host.
 
-Sample agent config snippet (user applies to their LOCAL agent
-`~/.kiro/agents/<name>.json`; the token lives in the handoff file, not here):
-```json
-{ "hooks": {
-    "agentSpawn":      [{"command":"\"C:/path/to/companion.exe\" --hook"}],
-    "userPromptSubmit":[{"command":"\"C:/path/to/companion.exe\" --hook"}],
-    "postToolUse":     [{"command":"\"C:/path/to/companion.exe\" --hook"}],
-    "stop":            [{"command":"\"C:/path/to/companion.exe\" --hook"}]
-} }
-```
+Kiro Crew manages built-in Agent JSON and may restore it on startup, so the
+Companion does **not** modify `~/.kiro/agents/<name>.json`. One-click install
+writes the supported standalone v1 file instead:
 
+- Windows: `C:\Users\<user>\.kiro\crew\hooks\ak-companion-status.json`
+- Other platforms: `~/.kiro/crew/hooks/ak-companion-status.json`
+- `KIRO_HOME` override: `$KIRO_HOME/crew/hooks/ak-companion-status.json`
+
+The file contains four global command actions (`SessionStart`,
+`UserPromptSubmit`, `PostToolUse`, `Stop`) invoking the absolute Companion path
+with `--hook`. It applies to every Crew Agent, activates without restart, and
+installation/removal preserves non-AK entries in the same file.
 ## Protocol
 - Reuses the existing `display` frame `{v,type:"display",payload:{agent_name,state,text}}`.
 - No new board→PC frame; control is out-of-band (keystrokes to Kiro Crew, not the board).
@@ -141,8 +142,9 @@ board actually shows the status. Tracked as milestone 3; not built here.
 KIRO CREW panel becomes **Local Control**:
 - "Bind window" (title input + bind), Focus indicator.
 - Free-text + Send / Command-Bar buttons; quick chords (Enter/Esc/arrows).
-- A **Status** area: start/stop the sink, show the token to paste into the hook,
-  and a live per-session status list (session id · state · text).
+- A **Status** area: globally install/remove the standalone Crew hook file,
+  start/stop the sink, show the handoff token, and render a live per-session
+  status list (session id · state · text).
 
 ## Verification
 - Linux: `cargo check`, `cargo test` (ControlRouter + map_hook_event pure tests),
