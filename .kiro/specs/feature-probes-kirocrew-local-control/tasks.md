@@ -30,7 +30,7 @@ Legend: [ ] todo · [x] done · [~] partial/seam
     per `session_id`; push to UI + emit `display` frame.
   - `status_sink_start/stop`, `status_token()` commands.
   - Generate a random token; write `{port,token}` to a handoff file
-    (`%LOCALAPPDATA%\ak-companion\hook.json` / `~/.config/ak-companion/hook.json`).
+    (`%APPDATA%\ak-companion\hook.json` / `~/.config/ak-companion/hook.json`).
 - [x] **T7 — `companion --hook` mode + sample agent config (Decision 2)**
   - Hook is a MODE of this binary, not a shell script: `main.rs` runs the hook
     handler and `exit(0)` before Tauri when argv has `--hook`. Reads STDIN hook

@@ -100,7 +100,7 @@ Flow:
 - **GUI / sink side.** When the user starts the sink (`status_sink_start`), the
   companion binds `127.0.0.1:<port>`, generates a random token, and writes a
   **handoff file** `{port, token}` to a stable location:
-  - Windows: `%LOCALAPPDATA%\ak-companion\hook.json`
+  - Windows: `%APPDATA%\ak-companion\hook.json`
   - else: `~/.config/ak-companion/hook.json`
   (resolved via `dirs::config_dir()`, `HOME/.config` fallback).
 - **Hook side (`companion --hook`).** `main.rs` checks argv **before** launching
