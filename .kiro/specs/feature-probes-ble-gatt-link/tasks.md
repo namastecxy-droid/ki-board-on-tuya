@@ -1,6 +1,6 @@
 # FP-2 ble-gatt-link · Tasks
 
-> 回填 spec：实现已完成，故 T1–T4 标记完成；T5 为真机验收，待执行。
+> 实现与真机验收均已完成；T1–T5 全部通过。
 > 勾选规则：`[ ]` 未开始 / `[~]` 进行中 / `[x]` 完成。
 
 - [x] **T1 — 脚手架 + 协议/输入复用（R6）** ✅ 2026-09-09
@@ -21,12 +21,10 @@
   - `TAL_BLE_EVT_WRITE_REQ` → 计数 + `link_rx` JSONL 回显 UART0
   - **BUILD SUCCESS**（AP 0.83MB/3.5MB）；`clang-format --Werror` clean
 
-- [ ] **T5 — 真机验收（DoD，待执行）**
-  - v1.2 板 + COM6 烧录：`.\flash.ps1 -Port COM6 -App "firmware/feature-probes/ble_gatt_link" -Monitor`
-  - 用 nRF Connect：扫到 `AK-KB` → 连接 → 对 `0x2B10` 开 notify → 按键看到 `key`/`nav` 帧
-    （nRF + UART 同时）→ 对 `0x2B11` 写数据看到 `link_rx`
-  - 验证断开自动重广播、可复连；记录 MTU 协商后长帧是否完整
-  - 回填本 spec 与 feature-probes README 的 FP-2 状态为 ✅
+- [x] **T5 — 真机验收（DoD）** ✅ 2026-09-13（用户确认）
+  - v1.2 板完成 BLE 广播、连接、notify 订阅和按键/导航帧验证
+  - PC→board write 与断开后重新广播/复连通过
+  - companion 已验证 Tuya BLE V2 notify/write，并保留 V1 兼容
 
 ## 依赖顺序
 T1 → T2 → T3 → T4 →（真机）T5。T2 是关键（BLE 外设不通则整体链路要改）。

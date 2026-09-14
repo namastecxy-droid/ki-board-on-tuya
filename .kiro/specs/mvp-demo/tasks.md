@@ -5,16 +5,9 @@
 
 - [x] **FP-1 · agent-display**(MVP 显示层)✅ — LVGL 场景+吉祥物+通知条+按键意图,rotation 270 真机 OK。spec `feature-probes-agent-display`。
 
-- [~] **FP-2 · ble-gatt-link**(无线地基)🔨
-  - 已有骨架(Tuya svc 0x1910 / notify 0x2B10 / write 0x2B11 / 广播 AK-KB / JSONL v1 镜像 UART0)
-  - 待补:**FP-2 spec 三件套**;广播+连接+CCCD 订阅+MTU 协商;key/nav→notify;write→UART 回显计数
-  - 验收:nRF Connect 连上、订阅、按键出 JSONL notify、write 有 `link_rx`;`tos.py build` + host 单测(如有纯逻辑)
-  - 出口门:companion 的 `usb_serial.rs` 可无改动换成 BLE client 收到同样 JSONL
+- [x] **FP-2 · ble-gatt-link**(无线地基)✅ — BLE 广播/连接/订阅、按键/导航 notify、PC→板 write、断开重广播均已实现并真机通过；companion 已兼容 Tuya BLE V1/V2。
 
-- [ ] **FP-3 · tuya-cloud-asr**(板载云 ASR)
-  - spec;`ai_chat` ONESHOT 接线 + `AI_USER_EVT_ASR_OK` 取字 + `asr_text` JSONL 帧
-  - 云激活(UUID+AuthKey MQTT bind)真机验证是否免 App;Wi-Fi 与 BLE 并发验证(K6)
-  - 验收:说一句 → UART/BLE 出 `asr_text`
+- [x] **FP-3 · tuya-cloud-asr**(板载云 ASR)✅ — HOLD/PTT、设备激活与 2.4G Wi-Fi、`AI_USER_EVT_ASR_OK` → UART0 `asr` JSONL 均已实现并真机通过（2026-09-13 用户确认）。
 
 - [ ] **FP-4 · kirocrew-control**(companion→Crew)
   - spec;Rust 连 Gateway `:5476` REST+WS;四类操作(绑定/输入/发送/切换)+ 事件订阅回流
@@ -34,11 +27,10 @@
   - 演示脚本覆盖 DoD 全部;真机走查
 
 ## 推荐推进顺序
-1. **FP-2 收口**(补 spec + 完成/验证,地基)→
-2. **FP-4**(companion→Crew,先用 UART 或 FP-2 BLE 喂假文字打通 Crew 注入)∥ **FP-3**(板载云 ASR)→
-3. **FP-5**(PC ASR,挂 FP-4 注入路径)→
-4. **FP-7 整合** + FP-1 显示层接真实事件 →
-5. **FP-6 兜底**(独立,可择机并行)
+1. ~~**FP-2 BLE GATT + FP-3 云 ASR**~~ ✅ 已完成并真机通过→
+2. **FP-4 / FP-5 Windows 验收**（companion 控制、系统 ASR）→
+3. **FP-7 整合** + FP-1 显示层接真实事件 →
+4. **FP-6 BLE HID 真机闸门**（配对、复连、发键）
 
 ## 每个 probe 的门禁(沿用项目约定)
 `tos.py build` 通过 · clang-format clean · 纯逻辑 host 单测 · check_pins(涉及引脚时)· README(操作/预期)。

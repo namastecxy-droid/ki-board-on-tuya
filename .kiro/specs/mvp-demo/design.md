@@ -60,8 +60,8 @@
 ```
 FP-1(显示层)✅
       │
-FP-2(BLE GATT 地基)🔨 ── 先做,FP-3/4/5 都挂在它上
-      ├── FP-3(板载云 ASR)      ┐
+FP-2(BLE GATT 地基)✅ ── 真机通过
+      ├── FP-3(板载云 ASR)✅    ┐
       ├── FP-4(companion→Crew)  ├─ FP-2 之后可并行
       └── FP-5(PC ASR)          ┘
 FP-6(BLE HID 兜底)── 相对独立(另一条 BLE 路线),可随时并行
@@ -81,4 +81,4 @@ FP-7(整合)── 需要 FP-2+FP-3+FP-4(+FP-5),复用 FP-1 显示层
 
 ## 9. 每个 probe 的 spec
 本 spec 是总计划。**每个 probe 开工前写自己的 `.kiro/specs/feature-probes-<name>/` 三件套**
-(FP-1 已有 `feature-probes-agent-display`)。FP-2 已在开发,应补写其 spec 后收口。
+(FP-1 已有 `feature-probes-agent-display`)。FP-2 与 FP-3 均已完成各自 spec、实现和真机验收。

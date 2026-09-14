@@ -15,10 +15,10 @@
   - probe README（含 D8 provenance/Apache-2.0）+ 路线图状态更新；Kconfig `select ENABLE_AI_COMPONENTS` 拉 AI 组件栈
   - **实现方式**：D8 整体派生 your_chat_bot 后裁剪(去 display2/battery/其他板 config)，非最小手写
 
-- [ ] **T6 — 真机验收（DoD，待执行，需板+2.4G Wi-Fi+有效 license）**
-  - 填 `ak_tuya_authkey.h` → 烧录 COM6 → 首连配网 → 激活/联网成功
-  - 按语音键说话 → UART0 出 `asr` 文字帧，内容一致；错误/空结果有帧
-  - 回填本 spec 与路线图 FP-3 状态
+- [x] **T6 — 真机验收（DoD）** ✅ 2026-09-13（用户确认）
+  - v1.2 板完成烧录、2.4G Wi-Fi 配网和设备激活/联网
+  - 按语音键说话后，云 ASR 识别结果通过 UART0 `asr` 文字帧输出
+  - FP-3 板载 Mic → Tuya 云 ASR → JSONL 链路真机通过
 
 ## 依赖顺序
 T1 → T2（硬门槛）→ T3 → T4 → T5 →（真机）T6。
