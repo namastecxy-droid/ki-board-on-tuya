@@ -106,29 +106,34 @@ Flow:
 - **Hook side (`companion --hook`).** `main.rs` checks argv **before** launching
   Tauri: if `--hook` is present it runs the hook handler and `exit(0)` without
   starting the GUI. The handler:
-  1. reads the Kiro hook JSON from **STDIN** (tolerant: empty/unparseable →
-     default event);
+  1. reads the Kiro hook JSON from **STDIN**; parse/read failures are written to
+     stderr for Crew's Hook Test/details UI while the process still exits 0;
   2. fills `session_id` from `$KIRO_SESSION_ID` when the body omitted it;
-  3. reads the handoff file for `{port, token}` — **absent → silent `exit 0`**
-     (no sink running is not an error, must never fail the agent turn);
+  3. reads the handoff file for `{port, token}`; absence/parse failure is written
+     to stderr but remains non-fatal to the agent turn;
   4. POSTs the slimmed event to `http://127.0.0.1:<port>/status` with header
-     `X-AK-Status-Token: <token>`, **short 800ms timeout**, best-effort;
+     `X-AK-Status-Token: <token>` and an 800ms timeout; connection/HTTP errors are
+     returned as diagnostics rather than swallowed;
   5. exits 0 fast.
 - This path is **cross-platform** (no `#[cfg(windows)]`, reuses `reqwest`
   blocking) so it `cargo check`s / `cargo test`s on the Linux CI host.
 
 Kiro Crew manages built-in Agent JSON and may restore it on startup, so the
-Companion does **not** modify `~/.kiro/agents/<name>.json`. One-click install
-writes the supported standalone v1 file instead:
+Companion does **not** modify `~/.kiro/agents/<name>.json`. Kiro Crew 0.6.0's
+Agent Capabilities page has two distinct stores: the upper **Hooks** table is the
+global ScriptHookStore; the lower **ACP Agent Hooks** table reflects CLI 2.x
+Agent JSON. Companion manages only the former:
 
-- Windows: `C:\Users\<user>\.kiro\crew\hooks\ak-companion-status.json`
-- Other platforms: `~/.kiro/crew/hooks/ak-companion-status.json`
-- `KIRO_HOME` override: `$KIRO_HOME/crew/hooks/ak-companion-status.json`
+- Windows: `C:\Users\<user>\.kiro\crew\hooks.json`
+- Other platforms: `~/.kiro/crew/hooks.json`
+- `KIRO_HOME` override: `$KIRO_HOME/crew/hooks.json`
 
-The file contains four global command actions (`SessionStart`,
+The shared store receives four ScriptHook entries (`AgentSpawn`,
 `UserPromptSubmit`, `PostToolUse`, `Stop`) invoking the absolute Companion path
-with `--hook`. It applies to every Crew Agent, activates without restart, and
-installation/removal preserves non-AK entries in the same file.
+with `--hook`. Installation/removal takes Crew's `hooks.json.lock`, preserves
+non-AK hooks and top-level webhook registrations, and is idempotent. Because the
+running gateway keeps this store in memory, an external Companion update becomes
+active only after **Apply & Restart** (or a Crew restart).
 ## Protocol
 - Reuses the existing `display` frame `{v,type:"display",payload:{agent_name,state,text}}`.
 - No new board→PC frame; control is out-of-band (keystrokes to Kiro Crew, not the board).
@@ -142,7 +147,7 @@ board actually shows the status. Tracked as milestone 3; not built here.
 KIRO CREW panel becomes **Local Control**:
 - "Bind window" (title input + bind), Focus indicator.
 - Free-text + Send / Command-Bar buttons; quick chords (Enter/Esc/arrows).
-- A **Status** area: globally install/remove the standalone Crew hook file,
+- A **Status** area: globally install/remove Companion entries in Crew's shared ScriptHookStore,
   start/stop the sink, show the handoff token, and render a live per-session
   status list (session id · state · text).
 
