@@ -12,7 +12,7 @@ companion module. Neither touches `session-control` or the webhook.
 
  STATUS  (Kiro Crew -> companion -> board, "the eyes")
    agent hook ──POST 127.0.0.1──▶ StatusSink ──▶ display frame ──▶ send_display ──▶ board LCD
-   (agentSpawn/postToolUse/stop, carries KIRO_SESSION_ID)
+   (agentSpawn/userPromptSubmit/postToolUse/stop, carries KIRO_SESSION_ID)
 ```
 
 > **Control gate (updated 2026-09-14).** `control_enabled` (default **ON**)
@@ -121,9 +121,10 @@ Sample agent config snippet (user applies to their LOCAL agent
 `~/.kiro/agents/<name>.json`; the token lives in the handoff file, not here):
 ```json
 { "hooks": {
-    "agentSpawn":  [{"command":"\"C:/path/to/companion.exe\" --hook"}],
-    "postToolUse": [{"command":"\"C:/path/to/companion.exe\" --hook"}],
-    "stop":        [{"command":"\"C:/path/to/companion.exe\" --hook"}]
+    "agentSpawn":      [{"command":"\"C:/path/to/companion.exe\" --hook"}],
+    "userPromptSubmit":[{"command":"\"C:/path/to/companion.exe\" --hook"}],
+    "postToolUse":     [{"command":"\"C:/path/to/companion.exe\" --hook"}],
+    "stop":            [{"command":"\"C:/path/to/companion.exe\" --hook"}]
 } }
 ```
 

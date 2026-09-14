@@ -19,8 +19,9 @@ machine, no tunnel):
 - **Control** = local keyboard injection into the focused Kiro Crew window
   (browser tab or desktop client), using the dashboard's own **Command Bar**
   (`Ctrl+K`, enabled by default) plus text entry and shortcut chords.
-- **Status read** = Kiro **agent lifecycle hooks** (`agentSpawn` / `postToolUse` /
-  `stop` …) POST live status to a small **localhost HTTP sink** in the companion;
+- **Status read** = Kiro **agent lifecycle hooks** (`agentSpawn` /
+  `userPromptSubmit` / `postToolUse` / `stop` …) POST live status to a small
+  **localhost HTTP sink** in the companion;
   the companion reflects it to the board as a `display` frame.
 
 Neither path uses `session-control` or the inbound webhook (`/api/hooks/agent`);
@@ -67,12 +68,12 @@ As a user, board keys/voice map to control actions.
 
 ### R3 — Read a specific chat's status via hooks
 As a user, I see the running status of the Kiro Crew chat I care about.
-- **AC3.1** A hook script, invoked by the agent on `agentSpawn` / `postToolUse` /
-  `stop`, reads the hook JSON on STDIN (incl. `KIRO_SESSION_ID`) and POSTs a status
-  event to the companion's localhost sink.
+- **AC3.1** A hook script, invoked by the agent on `agentSpawn` /
+  `userPromptSubmit` / `postToolUse` / `stop`, reads the hook JSON on STDIN
+  (incl. `KIRO_SESSION_ID`) and POSTs a status event to the companion's localhost sink.
 - **AC3.2** The companion's sink maps events to states: `running` (agentSpawn),
-  `using <tool>` (postToolUse, from `tool_name`), `idle` + reply summary (stop,
-  from `assistant_response`).
+  `received` (userPromptSubmit), `using <tool>` (postToolUse, from `tool_name`),
+  `idle` + reply summary (stop, from `assistant_response`).
 - **AC3.3** Status carries `KIRO_SESSION_ID`, so the companion can filter/label by
   a specific chat.
 - **AC3.4** The sink binds **127.0.0.1 only** and requires a shared token (the
