@@ -47,6 +47,10 @@ RX 超长行会整行丢弃，绘图矩形有边界裁剪，云初始化失败�
 
 #### M-14 transport/input 初始化失败会永久退出 app task
 
+**整改状态（2026-09-14）**：已修复。transport、input 和 TX mutex 初始化各重试 3 次；仍失败时延迟 2 秒后
+调用 `tal_system_reset()`，且 reset 异常返回时保持 task 存活。app thread 创建同样重试 3 次并采用受控重启，
+不再静默返回。
+
 `src/tuya_app_main.c:1204-1212` 在 transport 或 input 初始化失败后直接 `return`；
 `app_thread` 随后在 `:1423-1428` 删除自己，没有重试、降级模式、错误屏或受控重启。
 这会让设备仍上电但表现为完全失效。
@@ -127,10 +131,11 @@ ALL TESTS PASSED
 Host 测试仅覆盖纯 C 逻辑，不覆盖 BLE 安全、异步回调、UART/BLE 并发、SDK 初始化失败、
 PSRAM/LCD、云连接及真实音频状态机。
 
-### 2.3 未执行
+### 2.3 完整构建与未执行项
 
-- 后续修复回合已执行 `tos.py clean -f && tos.py build`：全部 app 对象及 `libtuyaapp.a` 编译成功；
-  T5AI AP/CP 最终链接因平台缓存缺失/损坏（`libbk_log.a` 缺失、`libbk_vfs.a` 格式错误）未完成。
+- 2026-09-14 后续修复回合执行 `tos.py build` 已成功：重新编译全部变更 app 对象、链接 `libtuyaapp.a`，
+  完成 T5AI AP/CP 链接并生成 `app_QIO_0.1.2.bin`、`app_UA_0.1.2.bin` 和 `app_UG_0.1.2.bin`。
+  先前的 `libbk_log.a` 缺失和 `libbk_vfs.a` 格式错误未再出现，无需删除共享平台缓存。
 - 未连接实体板：无法验证 BLE 链路是否实际启用加密、SDK 回调线程模型、LCD 刷屏耗时及云重连行为。
 - 未读取真实 `ak_tuya_authkey.h`，也未回显 UUID/AuthKey。
 
@@ -173,9 +178,10 @@ PSRAM/LCD、云连接及真实音频状态机。
 
 ### H-02 JSONL 输出未转义，存在协议注入和合法数据丢失
 
-**整改状态（2026-09-14，固件 0.1.1）**：协议注入部分已修复。所有动态字符串现在通过统一有界 JSON writer
-转义引号、反斜杠及控制字符，并新增 Host 回归测试。192 字节帧上限导致的超长消息整帧丢弃仍未处理，
-作为剩余可靠性问题继续跟踪。
+**整改状态（2026-09-14，固件 0.1.2）**：已修复。所有动态字符串通过统一有界 JSON writer 转义；
+ASR 使用 2 KiB 静态 TX 缓冲，覆盖 255 字节输入按 `\u00xx` 最坏六倍展开，避免占用 callback 栈；发送函数按实际
+buffer capacity 检查并记录超长错误。BLE notify 按协商 MTU 分片，Companion 继续按换行聚合完整 JSONL。
+Host 回归测试覆盖最坏 255 字节控制字符输入，完整 T5AI 构建通过。
 
 **原始证据**
 
@@ -325,6 +331,9 @@ ASR 结果、Wi-Fi 状态变化与按键、heartbeat、ack 在相近时间发生
 **建议**：改为 Kconfig `choice`，DUAL 也作为 choice 成员；CMake 对多选/零选显式 `FATAL_ERROR`，并在构建日志打印最终矩阵。
 
 ### M-10 BLE 文档与广告仍写 V1 0x1910，但当前 SDK 默认注册 V2 0xFD50
+
+**整改状态（2026-09-14）**：已修复。`AK_BLE_GATT_SERVICE_UUID` 与 `TAL_BLE_SERVICE_VERSION` 对齐；未显式覆盖时
+与 TuyaOpen SDK 同样默认 V2 `0xFD50`，V1 构建则广播 `0x1910`。启动日志和公共头不再硬编码 V1，完整构建通过。
 
 **证据**：`common/src/ak_ble_gatt.c:8-9`、`:54-57`，`common/include/ak_ble_gatt.h:6-20`、`Kconfig` 和
 `src/tuya_app_main.c:1199` 都写 0x1910/0x2B10/0x2B11；当前上游
