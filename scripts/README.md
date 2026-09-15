@@ -47,6 +47,42 @@
 > ⚠️ tyutool 的确切子命令/参数以 `tyutool_cli --help` 为准，如不同请调整脚本中 `write`/`monitor` 行。
 > 拉下来的 `fw.bin` 已被 `.gitignore` 忽略（`*.bin`），不入库。
 
+## flash-licensed.ps1 — 按设备别名选择已编译固件
+
+这是独立包装脚本，**不修改 `flash.ps1`**。它先按 `Orange` / `Purple` 选择一个
+明确的 QIO 固件，通过 SCP 下载并校验 SHA256，然后调用现有
+`flash.ps1 -NoPull` 完成烧录。扩展底板默认使用 COM6。
+
+```powershell
+# 已锁定的 main 0.1.8 基线：Orange / Purple
+.\flash-licensed.ps1 -LicenseAlias Orange -Port COM6
+.\flash-licensed.ps1 -LicenseAlias Purple -Port COM6
+
+# 当前 BLE ownership 测试候选版
+.\flash-licensed.ps1 -LicenseAlias Orange -BuildSet Candidate -Port COM6 -Monitor
+.\flash-licensed.ps1 -LicenseAlias Purple -BuildSet Candidate -Port COM6 -Monitor
+
+# 任意分支上的已编译 QIO：必须传绝对远端路径，文件名必须包含 alias
+.\flash-licensed.ps1 -LicenseAlias Orange -BuildSet Branch `
+  -RemoteBinPath "/data/projects/my-worktree/test-builds/ak-firmware_QIO_ble-fix-orange.bin" `
+  -Port COM6
+```
+
+`Branch` 模式不会猜测分支 `dist` 里哪个 License 最后编译。先在 devbox 将产物复制为
+包含 `orange` 或 `purple` 的明确文件名，再把该绝对路径传给 `-RemoteBinPath`。
+脚本通过远端 `sha256sum` 获取预期值并在本机下载后复核；alias 与文件名不一致时拒绝烧录。
+
+| 参数 | 默认 | 说明 |
+|------|------|------|
+| `-LicenseAlias` | 必填 | `Orange` 或 `Purple` |
+| `-BuildSet` | `Baseline` | `Baseline` / `Candidate` / `Branch` |
+| `-Version` | `0.1.8` | 基线/候选固件版本 |
+| `-ReleaseId` | `260915_0950` | 已锁定 main release ID |
+| `-CandidateId` | `260915_0957` | 当前测试候选 ID |
+| `-RemoteBinPath` | 空 | `Branch` 模式必填的远端 QIO 绝对路径 |
+| `-Port` | `COM6` | 扩展底板 CH340C 烧录串口 |
+| `-Monitor` | 关 | 烧录后调用原脚本打开串口监视 |
+
 ## 排障记录：tyutool monitor 的端口/波特率坑
 
 > 环境：tyutool v3.2.9 (windows/x86_64)。记录日期：2026-08-31。
