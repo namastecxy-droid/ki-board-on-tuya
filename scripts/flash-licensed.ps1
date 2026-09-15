@@ -25,6 +25,10 @@
   binary. Its filename must contain the selected LicenseAlias to prevent
   accidentally flashing an Orange build onto Purple (or vice versa).
 
+.PARAMETER Force
+  Download the selected firmware again even when scripts\fw.bin already has the
+  same SHA256. By default an exact local hash match skips the firmware SCP.
+
 .EXAMPLE
   .\flash-licensed.ps1 -LicenseAlias Orange -Port COM6
 
@@ -51,6 +55,7 @@ param(
     [string]$RemoteBinPath,
     [string]$Port = "COM6",
     [switch]$Monitor,
+    [switch]$Force,
     [int]$Baud = 460800,
     [int]$MonitorBaud = 115200,
     [string]$SshHost = "devbox-ssm",
@@ -156,41 +161,57 @@ try {
         }
     }
 
-    Info "Pulling selected QIO firmware..."
-    scp "${SshHost}:${remoteBin}" $downloadBin
-    if ($LASTEXITCODE -ne 0 -or -not (Test-Path $downloadBin)) {
-        Fail "Could not download firmware from $remoteBin"
+    $reuseLocalBin = $false
+    if (-not $Force -and (Test-Path $localBin)) {
+        Info "Checking existing local fw.bin..."
+        $actualSha = (Get-FileHash -Algorithm SHA256 $localBin).Hash.ToLowerInvariant()
+        if ($actualSha -eq $expectedSha) {
+            $reuseLocalBin = $true
+            Ok "Local fw.bin already matches target SHA256; skipping firmware download."
+        } else {
+            Info "Local fw.bin differs from selected artifact; downloading replacement."
+        }
+    } elseif ($Force) {
+        Info "Force requested; downloading firmware even if local SHA256 matches."
     }
 
-    $actualSha = (Get-FileHash -Algorithm SHA256 $downloadBin).Hash.ToLowerInvariant()
-    if ($actualSha -ne $expectedSha) {
-        Fail "SHA256 mismatch. Expected $expectedSha, got $actualSha. Existing fw.bin was not changed."
-    }
-    Ok "SHA256 verified: $actualSha"
+    if (-not $reuseLocalBin) {
+        Info "Pulling selected QIO firmware..."
+        scp "${SshHost}:${remoteBin}" $downloadBin
+        if ($LASTEXITCODE -ne 0 -or -not (Test-Path $downloadBin)) {
+            Fail "Could not download firmware from $remoteBin"
+        }
 
-    Move-Item -Path $downloadBin -Destination $localBin -Force
+        $actualSha = (Get-FileHash -Algorithm SHA256 $downloadBin).Hash.ToLowerInvariant()
+        if ($actualSha -ne $expectedSha) {
+            Fail "SHA256 mismatch. Expected $expectedSha, got $actualSha. Existing fw.bin was not changed."
+        }
+        Ok "Downloaded firmware SHA256 verified: $actualSha"
+        Move-Item -Path $downloadBin -Destination $localBin -Force
+        Ok "Installed $remoteName as $localBin"
+    }
+
     $remoteSize = (Get-Item $localBin).Length
-    Set-Content -Path $localMeta -Value "$remoteBin|$remoteSize|sha256:$actualSha" -NoNewline
-    Ok "Installed $remoteName as $localBin"
+    Set-Content -Path $localMeta -Value "$remoteBin|$remoteSize|sha256:$expectedSha" -NoNewline
 } finally {
     if (Test-Path $downloadBin) { Remove-Item $downloadBin -Force }
     if (Test-Path $downloadSums) { Remove-Item $downloadSums -Force }
 }
 
-$flashArgs = @(
-    "-NoPull",
-    "-Port", $Port,
-    "-Baud", $Baud,
-    "-MonitorBaud", $MonitorBaud,
-    "-SshHost", $SshHost,
-    "-RemoteProjectRoot", $RemoteProjectRoot,
-    "-TyuTool", $TyuTool,
-    "-Device", $Device
-)
-if ($Monitor) { $flashArgs += "-Monitor" }
+$flashParams = @{
+    NoPull = $true
+    Port = $Port
+    Baud = $Baud
+    MonitorBaud = $MonitorBaud
+    SshHost = $SshHost
+    RemoteProjectRoot = $RemoteProjectRoot
+    TyuTool = $TyuTool
+    Device = $Device
+}
+if ($Monitor) { $flashParams.Monitor = $true }
 
 Info "Delegating flash to existing flash.ps1 (source=$sourceLabel, alias=$LicenseAlias)"
-& $flashScript @flashArgs
+& $flashScript @flashParams
 if ($LASTEXITCODE -ne 0) {
     Fail "flash.ps1 failed with exit code $LASTEXITCODE"
 }

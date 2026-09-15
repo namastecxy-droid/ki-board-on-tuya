@@ -70,7 +70,9 @@
 
 `Branch` 模式不会猜测分支 `dist` 里哪个 License 最后编译。先在 devbox 将产物复制为
 包含 `orange` 或 `purple` 的明确文件名，再把该绝对路径传给 `-RemoteBinPath`。
-脚本通过远端 `sha256sum` 获取预期值并在本机下载后复核；alias 与文件名不一致时拒绝烧录。
+脚本先取得目标 SHA256，再校验本地 `scripts/fw.bin`；完全相同则跳过固件 SCP 并直接烧录。
+只有 hash 不同、本地文件不存在或显式传 `-Force` 时才重新下载。Branch 模式的预期
+SHA256 由远端 `sha256sum` 取得，Baseline/Candidate 则来自随包 `SHA256SUMS`。
 
 | 参数 | 默认 | 说明 |
 |------|------|------|
@@ -80,6 +82,7 @@
 | `-ReleaseId` | `260915_0950` | 已锁定 main release ID |
 | `-CandidateId` | `260915_0957` | 当前测试候选 ID |
 | `-RemoteBinPath` | 空 | `Branch` 模式必填的远端 QIO 绝对路径 |
+| `-Force` | 关 | 即使本地 SHA256 相同也重新下载固件 |
 | `-Port` | `COM6` | 扩展底板 CH340C 烧录串口 |
 | `-Monitor` | 关 | 烧录后调用原脚本打开串口监视 |
 
