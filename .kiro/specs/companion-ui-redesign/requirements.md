@@ -128,6 +128,8 @@ high-contrast color is reserved for genuine attention signals only. 舒适优先
 - A2 Switching locale swaps all visible strings incl. tooltips; no literal leaks.
 - A3 Simple↔Advanced toggle resizes the window and shows the specified control sets, preserving live
   connection/state.
-- A4 LOCAL CTRL renders as 4 ordered steps with gating; Simple mode hides steps and shows watched chat.
+- A4 Control shows a persisted mechanism selector; API+WS path is default-expanded (endpoint/auth/WS
+  status + chat list from `/api/chat/slots` + one-click Watch), legacy 4-step chain is collapsed and
+  still functional; Simple mode shows only "Watching: <chat>".
 - A5 No explanatory paragraph is visible by default; all live behind `(i)` popovers.
 - A6 Final verification is running the Tauri desktop app against a real AK — NOT a browser preview.
