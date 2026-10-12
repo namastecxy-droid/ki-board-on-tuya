@@ -1,28 +1,28 @@
 {
   "id": "FEAT-002",
   "type": "fix",
-  "description": "Issue B — after ASR, recognized text is pushed straight to the backend via the Crew API instead of appearing in the current chat's prompt input box for the user to edit and submit. Root cause: companion/src-tauri/src/lib.rs handle_frame() tries route_board_via_crew_api() FIRST; that function consumes Inbound::Asr/Inbound::Macro via append_crew_draft (companion-side draft -> REST send on K5), so the legacy SendInput path (kirocrew_control.rs route_input -> ControlAction::Compose, which types into the live Kiro Crew composer with NO Enter) never runs while the API is connected. Git history (commit bbf15e4 'stop dictation auto-submitting — focus window, not Alt+Enter') confirms the earlier interaction typed ASR text editable into the Kiro Crew composer; commit 57ce4ce introduced the API draft path. Decision: restore the earlier behavior by making ASR/Macro fill-back go through Compose again (focus the bound chat + type at the caret, APPEND, never auto-submit; K5 still submits). Keep the Crew API primary for K1-K3 selection/jump and for K5 submit/continue. Edit buffer semantics: APPEND at caret (the safe non-destructive behavior, matching type_text_raw). This FEAT is independent of FEAT-001 (disjoint files).",
+  "description": "Issue B — after ASR, recognized text was pushed straight to the backend via the Crew API instead of appearing in the current chat's prompt input box for the user to edit and submit. The companion now lets ASR, Macro, K5, and board composer-editing navigation fall through the API-first route to the existing Kiro Crew live-composer controller. ASR/Macro text is appended at the caret without Enter; short Nav Left sends Backspace, long Nav Left repeats Ctrl+Backspace, long Nav Up sends Ctrl+A then Backspace, and K5 sends Enter to submit the visible edited text. K1-K3 stable-slot selection and optional Alt+N jump remain API-first. This FEAT is independent of FEAT-001 (disjoint implementation files).",
   "status": "completed",
   "steps": [
-    "Read context.json and this file first. In companion/src-tauri/src/lib.rs, in route_board_via_crew_api (~lines 1518-1605), stop consuming Inbound::Asr and Inbound::Macro: either return false for those two arms or remove them, so handle_frame's fall-through (~lines 1856-1872) reaches the legacy kc_router, which maps Asr/Macro -> ControlAction::Compose(text) and types into the focused Kiro Crew composer with no Enter.",
-    "Keep route_board_via_crew_api consuming K1-K3 Click (slot select + optional Alt+N jump) and K5 Down (submit_or_continue_crew_slot) unchanged, so API selection/jump and explicit submit still work.",
-    "Add a concise English comment at the changed arms: ASR/Macro fill-back is intentionally routed to the Kiro Crew composer (Compose: focus window + type, APPEND at caret, NO auto-send); K5 submits. This restores the earlier interaction and keeps the text editable in the live chat.",
-    "Preserve empty-text and recognition-failure handling: kirocrew_control.rs route_input already drops empty Asr/Macro text; do not change that. Board-side asr error/empty frames must not type anything.",
-    "If removing the Asr/Macro arms makes any of append_crew_draft / edit_crew_draft / crew_api_drafts / the crew-api-draft emit become dead code and that breaks the build (deny(warnings) or unused warnings as errors), apply the MINIMAL change to keep the build clean — prefer keeping the functions (e.g. retain the nav-driven edit path or add #[allow(dead_code)] with an English note) over deleting working code. Do not refactor beyond what the build requires.",
-    "Only touch companion/src-tauri/src/kirocrew_control.rs if required to keep the build/tests green (e.g. to assert the fall-through); the existing asr_text_routes_to_compose test should still hold."
+    "Read context.json and this file first. In companion/src-tauri/src/lib.rs, make route_board_via_crew_api return false for Inbound::Asr and Inbound::Macro so handle_frame reaches the existing kc_router, which maps them to ControlAction::Compose(text) and types into the focused Kiro Crew composer without Enter.",
+    "Let K5 fall through to the same live-composer controller, where Down/Long maps to Enter, so it submits the text after the user edits it. Keep K1-K3 Click stable-slot selection and optional Alt+N jump unchanged.",
+    "Let Nav Left short/long and Nav Up long fall through to the live-composer controller instead of editing crew_api_drafts, so board editing acts on the visible composer text.",
+    "Preserve empty-text and recognition-failure handling: kirocrew_control.rs route_input already drops empty Asr/Macro text; board-side ASR error/empty frames must not type anything.",
+    "Keep changes minimal and retain REST draft helpers only for compatibility; do not change the wire protocol or add a test suite."
   ],
   "acceptance_criteria": [
-    "After the change, when the Crew API is connected, an inbound `asr` or `macro` frame is NOT consumed by route_board_via_crew_api and instead reaches the legacy router that produces ControlAction::Compose (text typed into the Kiro Crew composer, no Enter, no auto-submit).",
-    "K1-K3 selection/jump and K5 submit/continue via the Crew API are unchanged.",
-    "cargo test for the companion reports '0 failed' (existing asr_text_routes_to_compose and routing tests pass; add an assertion for the new fall-through only inside an existing #[cfg(test)] module if cheap — no new test file).",
-    "npm run typecheck exits 0.",
-    "No wire-protocol change; shared/protocol/protocol.md untouched."
+    "When the Crew API is connected, inbound `asr` and `macro` frames reach the existing ControlAction::Compose path, which types into the live Kiro Crew composer at the caret without Enter or automatic submission.",
+    "K5 Down/Long reaches the live-composer controller and injects Enter, submitting the visible text including user edits; K1-K3 API selection and optional jump remain unchanged.",
+    "Nav Left short/long and Nav Up long edit the live composer through Backspace, repeated Ctrl+Backspace, and Ctrl+A plus Backspace rather than modifying crew_api_drafts.",
+    "Companion cargo tests report 0 failed, firmware host tests report ALL TESTS PASSED, and npm run typecheck exits 0.",
+    "No wire-protocol change; shared/protocol/protocol.md remains untouched."
   ],
   "verification": [
-    "cargo test --manifest-path companion/src-tauri/Cargo.toml  -> expect '... passed; 0 failed' (ignore the shell exit code: this host exits 1 even when all tests pass; '0 failed' is the pass signal).",
-    "cd companion; npm run typecheck  -> expect exit 0.",
-    "Note in findings that end-to-end keystroke injection into the live Kiro Crew composer is Windows+Kiro-Crew+board hardware-only; the routing decision is unit-verified."
+    "cargo test --manifest-path companion/src-tauri/Cargo.toml -> expect 0 failed; this verifies the existing low-level Compose, Enter, and navigation mappings, but does not directly exercise the Windows-only route_board_via_crew_api fall-through decision.",
+    "Run the firmware host test script under WSL -> expect ALL TESTS PASSED.",
+    "cd companion; npm run typecheck -> expect exit 0.",
+    "End-to-end keystroke injection and the API-online fall-through require Windows, Kiro Crew, and board hardware; code review confirms those route_board_via_crew_api arms return false."
   ],
   "blocked_reason": null,
-  "findings": "Changed route_board_via_crew_api so ASR and Macro frames return false and fall through to the existing Compose router, which appends at the live composer caret without Enter; K1-K3 API selection/jump and K5 API submit remain unchanged. cargo test passed with 97 tests and 0 failed; npm run typecheck exited 0. append_crew_draft became unused and emitted a non-fatal dead_code warning, so no dead-code mitigation was needed under the feature's minimal-change rule. End-to-end keystroke injection into the live Kiro Crew composer requires Windows, Kiro Crew, and board hardware; the routing behavior is covered by the existing Compose unit tests."
+  "findings": "ASR, Macro, K5, and composer-editing navigation now fall through route_board_via_crew_api to the existing live Kiro Crew composer controller. ASR/Macro append without Enter; K5 injects Enter; short Nav Left, long Nav Left, and long Nav Up edit the visible composer instead of crew_api_drafts. K1-K3 API selection and optional Alt+N jump are unchanged. Firmware host tests reported ALL TESTS PASSED, companion cargo tests reported 97 passed and 0 failed, and npm run typecheck exited 0. Existing unit tests cover the underlying Compose, Enter, and navigation mappings, but they do not directly instantiate the Windows-only API-first routing path. End-to-end injection and API-online routing still require Windows, Kiro Crew, and board hardware."
 }
