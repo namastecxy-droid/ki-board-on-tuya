@@ -1,0 +1,24 @@
+{
+  "id": "FEAT-001",
+  "type": "fix",
+  "description": "Issue A — the three left-side Chat A/B/C status indicators sometimes do not auto-refresh. Root cause: in firmware/app/src/tuya_app_main.c the inbound `display` frame handler only redraws when the updated slot equals s_selected_session, but the sidebar (ak_draw_session_sidebar) paints ALL three slots' colors inside the full ak_render_status(). So a state change for a NON-selected slot updates memory but schedules no repaint; the color stays stale until the user switches slots. Fix: schedule a repaint for every accepted display frame (immediate render for the selected slot; set the deferred s_lcd_redraw_pending flag for a non-selected slot so the main loop repaints the sidebar once the audio guard clears). This also makes init/reconnect resync visible since the companion re-sends per-slot display frames. This FEAT is independent of FEAT-002 (disjoint files).",
+  "status": "completed",
+  "steps": [
+    "Read context.json and this file first. In firmware/app/src/tuya_app_main.c, locate the `display` branch of on_rx_line() (around line 1721-1746), after it writes session->agent/session->state and calls ak_chat_history_add(session, text, true).",
+    "Change the redraw logic so a NON-selected slot's state/agent change also triggers a repaint: keep `if (session_index == s_selected_session) { ak_render_status(); }` for the selected slot, and add an else branch that sets `s_lcd_redraw_pending = true;` (the main-loop block around lines 1943-1948 flushes it through ak_render_status() once (int32_t)(s_lcd_audio_guard_until_ms - now) <= 0 and !ak_asr_audio_busy()). Equivalent acceptable form: always set s_lcd_redraw_pending = true and additionally render immediately for the selected slot.",
+    "Add a concise English comment stating that the left sidebar shows all three slots' status colors, so a non-selected slot's state change still needs a repaint (prevents the stale-color regression).",
+    "Do NOT modify ak_draw_session_sidebar, ak_status_color, the frame-buffer draw code, the protocol, or any .config. No new files."
+  ],
+  "acceptance_criteria": [
+    "firmware/app/src/tuya_app_main.c: every accepted `display` frame schedules a repaint (selected slot renders immediately; non-selected slot sets s_lcd_redraw_pending so the sidebar repaints via the main loop).",
+    "Running the firmware host unit tests prints 'ALL TESTS PASSED' (no regression; this file is not host-compiled but the pure-module tests must still pass).",
+    "No protocol change, no .config change, no change to sidebar/color/draw helpers."
+  ],
+  "verification": [
+    "bash -lc \"cd /mnt/c/@MyWorks/21_HardWorks/agentic_keyboard_with_tuya/firmware/app/test && bash run_host_tests.sh\"  -> expect 'ALL TESTS PASSED'",
+    "If a local firmware build of the display profile (TUYA_T5AI_CORE_dual_cloudasr, which defines AK_ENABLE_DISPLAY) is available via tos.py, build it and confirm no new errors/warnings; after any .config edit run `tos.py clean -f` first. If the native tos.py toolchain is unavailable in this environment (Windows cloud-build route), record that the firmware compile is environment-limited and rely on the host tests + code review — do NOT fabricate a build result. Record the outcome in findings.",
+    "Note in findings that the on-screen visual refresh of non-selected slots is hardware-only (needs the T5AI-Core board + companion)."
+  ],
+  "blocked_reason": null,
+  "findings": "Implemented deferred redraw for accepted display updates targeting non-selected slots; selected slots still render immediately. Firmware host tests passed with ALL TESTS PASSED. The native tos.py toolchain was unavailable on this Windows environment, so the display-profile firmware build was environment-limited and did not run. Visual confirmation of non-selected sidebar color refresh remains hardware-only and requires a T5AI-Core board plus the companion."
+}
