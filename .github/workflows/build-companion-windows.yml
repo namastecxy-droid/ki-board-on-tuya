@@ -1,0 +1,55 @@
+name: Build Companion (Windows)
+
+on:
+  push:
+    branches:
+      - 'release/**'
+  workflow_dispatch:   # 允许手动触发
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: companion/package-lock.json
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.99.0'
+
+      - name: Cache Rust dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~\.cargo\registry
+            ~\.cargo\git
+            companion\src-tauri\target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('companion/src-tauri/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Install npm dependencies
+        working-directory: companion
+        run: npm ci
+
+      - name: Build (Tauri)
+        working-directory: companion
+        run: npx tauri build
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: companion-windows-${{ github.sha }}
+          path: |
+            companion/src-tauri/target/release/agentic-keyboard-companion.exe
+            companion/src-tauri/target/release/bundle/
+          retention-days: 30
